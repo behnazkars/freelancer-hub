@@ -23,3 +23,7 @@ __pycache__/
 # OS
 .DS_Store
 Thumbs.db
+
+# VS Code — ignore personal settings but keep workspace config
+.vscode/*
+!.vscode/settings.json
