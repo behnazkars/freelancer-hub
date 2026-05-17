@@ -4,6 +4,10 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app.config import settings
+from app.database import engine, Base
+
+# Import models so Base knows about them before create_all
+import app.models  # noqa: F401
 
 # Create the FastAPI application instance
 # This is the core object — everything plugs into it
@@ -13,6 +17,10 @@ app = FastAPI(
     version="0.1.0",
     debug=settings.debug,
 )
+
+# Create all database tables on startup
+# If the table already exists, it does nothing (safe to run repeatedly)
+Base.metadata.create_all(bind=engine)
 
 # Mount the static files directory
 # Any file in /static/ is now served at /static/filename
