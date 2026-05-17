@@ -52,18 +52,31 @@ Visit `http://127.0.0.1:8000/docs` for the interactive API documentation.
 ## Project Structure
 
 freelancer-hub/
+
 ├── app/
+
 │   ├── main.py          # FastAPI app entry point
+
 │   ├── config.py        # Settings and environment variables
+
 │   ├── database.py      # SQLAlchemy engine and session
+
 │   ├── routers/         # API endpoints (one file per feature)
+
 │   ├── models/          # Database table definitions
+
 │   ├── schemas/         # Pydantic validation schemas
+
 │   ├── services/        # Business logic layer
+
 │   └── auth/            # Authentication utilities
+
 ├── templates/           # Jinja2 HTML templates
+
 ├── static/              # CSS, JavaScript, images
+
 ├── requirements.txt
+
 └── README.md
 
 ## Status
