@@ -5,7 +5,7 @@ from fastapi.templating import Jinja2Templates
 
 from app.config import settings
 from app.database import engine, Base
-from app.routers import auth,  clients, projects
+from app.routers import auth,  clients, projects, time_entries, invoices
 
 
 # Import models so Base knows about them before create_all
@@ -35,6 +35,8 @@ templates = Jinja2Templates(directory="templates")
 app.include_router(auth.router)
 app.include_router(clients.router)
 app.include_router(projects.router)
+app.include_router(time_entries.router)
+app.include_router(invoices.router)
 
 # A simple health-check endpoint
 # This is industry standard — every production API has one
