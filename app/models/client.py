@@ -1,7 +1,8 @@
 # app/models/client.py
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
-from sqlalchemy.orm import relationship
+from sqlalchemy import String, DateTime, ForeignKey
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
+from typing import Optional
 
 from app.database import Base
 
@@ -9,22 +10,28 @@ from app.database import Base
 class Client(Base):
     __tablename__ = "clients"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
 
     # ForeignKey links this row to a specific user
     # "users.id" means: the id column in the users table
     # ondelete="CASCADE" means: if the user is deleted,
     # all their clients are automatically deleted too
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE")
+    )
 
-    name = Column(String, nullable=False)
-    email = Column(String, nullable=True)
-    phone = Column(String, nullable=True)
-    company = Column(String, nullable=True)
-    notes = Column(String, nullable=True)
+    name: Mapped[str] = mapped_column(String)
+    email: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    phone: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    company: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(String, nullable=True)
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    created_at: Mapped[Optional[str]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[str]] = mapped_column(
+        DateTime(timezone=True), onupdate=func.now(), nullable=True
+    )
 
     # Relationships let you navigate between tables in Python
     # e.g. client.projects gives you all projects for this client

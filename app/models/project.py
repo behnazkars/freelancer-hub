@@ -1,8 +1,9 @@
 # app/models/project.py
 import enum
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Enum
-from sqlalchemy.orm import relationship
+from sqlalchemy import String, Float, DateTime, ForeignKey, Enum
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
+from typing import Optional
 
 from app.database import Base
 
@@ -19,23 +20,33 @@ class ProjectStatus(str, enum.Enum):
 class Project(Base):
     __tablename__ = "projects"
 
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    client_id = Column(Integer, ForeignKey("clients.id", ondelete="CASCADE"), nullable=False)
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE")
+    )
+    client_id: Mapped[int] = mapped_column(
+        ForeignKey("clients.id", ondelete="CASCADE")
+    )
 
-    name = Column(String, nullable=False)
-    description = Column(String, nullable=True)
+    name: Mapped[str] = mapped_column(String)
+    description: Mapped[Optional[str]] = mapped_column(String, nullable=True)
 
     # hourly_rate is what you charge per hour for this project
-    hourly_rate = Column(Float, default=0.0)
+    hourly_rate: Mapped[float] = mapped_column(Float, default=0.0)
 
     # budget is the total agreed amount (optional)
-    budget = Column(Float, nullable=True)
+    budget: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
-    status = Column(Enum(ProjectStatus), default=ProjectStatus.active)
+    status: Mapped[ProjectStatus] = mapped_column(
+        Enum(ProjectStatus), default=ProjectStatus.active
+    )
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    created_at: Mapped[Optional[str]] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[Optional[str]] = mapped_column(
+        DateTime(timezone=True), onupdate=func.now(), nullable=True
+    )
 
     # Relationships
     owner = relationship("User", back_populates="projects")
