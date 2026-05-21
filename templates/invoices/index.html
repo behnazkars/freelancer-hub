@@ -1,0 +1,353 @@
+<!-- templates/invoices/index.html -->
+{% extends "base.html" %}
+
+{% block title %}Invoices — Freelancer Hub{% endblock %}
+{% block page_title %}Invoices{% endblock %}
+
+{% block content %}
+
+<div style="display:flex; justify-content:space-between;
+            align-items:center; margin-bottom:1.5rem;">
+    <div style="font-size:13px; color:var(--text-hint);">
+        Create and track your invoices
+    </div>
+    <button class="btn btn-primary" onclick="openAddModal()">+ New invoice</button>
+</div>
+
+<!-- Summary -->
+<div class="kpi-grid" style="margin-bottom:1.5rem;">
+    <div class="kpi-card">
+        <div class="kpi-label">Total invoiced</div>
+        <div class="kpi-value" id="total-invoiced">—</div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-label">Paid</div>
+        <div class="kpi-value" id="total-paid">—</div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-label">Pending</div>
+        <div class="kpi-value" id="total-pending">—</div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-label">Overdue</div>
+        <div class="kpi-value" id="total-overdue" style="color:var(--danger)">—</div>
+    </div>
+</div>
+
+<!-- Invoice list -->
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">All invoices</div>
+    </div>
+    <div id="invoices-container">
+        <div class="empty-state">Loading...</div>
+    </div>
+</div>
+
+<!-- Modal -->
+<div id="modal-overlay" style="display:none; position:fixed; inset:0;
+     background:rgba(0,0,0,0.3); z-index:200;
+     align-items:center; justify-content:center;">
+    <div style="background:var(--surface); border-radius:var(--radius-lg);
+                padding:1.75rem; width:100%; max-width:460px;
+                margin:1rem; max-height:90vh; overflow-y:auto;">
+        <div style="display:flex; justify-content:space-between;
+                    align-items:center; margin-bottom:1.25rem;">
+            <h2 style="font-size:16px; font-weight:600;"
+                id="modal-title">New invoice</h2>
+            <button onclick="closeModal()"
+                    style="background:none; border:none; font-size:20px;
+                           cursor:pointer; color:var(--text-hint);">×</button>
+        </div>
+
+        <div id="modal-error" class="alert alert-error" style="display:none;"></div>
+
+        <div class="form-group">
+            <label class="form-label">Invoice number <span style="color:var(--danger)">*</span></label>
+            <input type="text" id="f-number" class="form-input"
+                   placeholder="e.g. INV-001">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Client <span style="color:var(--danger)">*</span></label>
+            <select id="f-client" class="form-input">
+                <option value="">Select a client...</option>
+            </select>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+            <div class="form-group">
+                <label class="form-label">Amount ($) <span style="color:var(--danger)">*</span></label>
+                <input type="number" id="f-amount" class="form-input"
+                       placeholder="0.00" min="0" step="0.01"
+                       oninput="updateTotal()">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Tax rate (%)</label>
+                <input type="number" id="f-tax" class="form-input"
+                       placeholder="0" min="0" max="100" value="0"
+                       oninput="updateTotal()">
+            </div>
+        </div>
+
+        <!-- Live total preview -->
+        <div style="background:var(--surface-2); border-radius:var(--radius-sm);
+                    padding:0.75rem 1rem; margin-bottom:1rem;
+                    font-size:13px; display:flex;
+                    justify-content:space-between; align-items:center;">
+            <span style="color:var(--text-hint);">Total amount</span>
+            <span style="font-weight:600; font-size:16px;"
+                  id="total-preview">$0.00</span>
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+            <div class="form-group">
+                <label class="form-label">Issue date <span style="color:var(--danger)">*</span></label>
+                <input type="date" id="f-issue" class="form-input">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Due date <span style="color:var(--danger)">*</span></label>
+                <input type="date" id="f-due" class="form-input">
+            </div>
+        </div>
+
+        <div class="form-group" id="status-group" style="display:none;">
+            <label class="form-label">Status</label>
+            <select id="f-status" class="form-input">
+                <option value="draft">Draft</option>
+                <option value="sent">Sent</option>
+                <option value="paid">Paid</option>
+                <option value="overdue">Overdue</option>
+                <option value="cancelled">Cancelled</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">Notes</label>
+            <textarea id="f-notes" class="form-input" rows="2"
+                      style="resize:vertical;"
+                      placeholder="Payment terms, bank details..."></textarea>
+        </div>
+
+        <div style="display:flex; gap:10px;
+                    justify-content:flex-end; margin-top:1.25rem;">
+            <button class="btn" onclick="closeModal()"
+                    style="border:1px solid var(--border);">Cancel</button>
+            <button class="btn btn-primary" onclick="saveInvoice()">Save invoice</button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let editingId  = null;
+let allClients = [];
+
+async function loadClients() {
+    const res = await fetch('/clients/', {
+        headers: { 'Authorization': 'Bearer ' + token }
+    });
+    allClients = await res.json();
+    const select = document.getElementById('f-client');
+    select.innerHTML = '<option value="">Select a client...</option>' +
+        allClients.map(c =>
+            `<option value="${c.id}">${c.name}</option>`
+        ).join('');
+}
+
+async function loadInvoices() {
+    const res = await fetch('/invoices/', {
+        headers: { 'Authorization': 'Bearer ' + token }
+    });
+    const invoices = await res.json();
+    renderInvoices(invoices);
+    renderSummary(invoices);
+}
+
+function renderSummary(invoices) {
+    const total   = invoices.reduce((s, i) => s + i.total_amount, 0);
+    const paid    = invoices.filter(i => i.status === 'paid')
+                            .reduce((s, i) => s + i.total_amount, 0);
+    const pending = invoices.filter(i => ['sent','draft'].includes(i.status))
+                            .reduce((s, i) => s + i.total_amount, 0);
+    const overdue = invoices.filter(i => i.status === 'overdue')
+                            .reduce((s, i) => s + i.total_amount, 0);
+
+    document.getElementById('total-invoiced').textContent = fmt(total);
+    document.getElementById('total-paid').textContent     = fmt(paid);
+    document.getElementById('total-pending').textContent  = fmt(pending);
+    document.getElementById('total-overdue').textContent  = fmt(overdue);
+}
+
+function fmt(v) {
+    return '$' + Number(v).toLocaleString('en-US', {
+        minimumFractionDigits: 2, maximumFractionDigits: 2
+    });
+}
+
+function renderInvoices(invoices) {
+    const container = document.getElementById('invoices-container');
+
+    if (!invoices.length) {
+        container.innerHTML = `
+            <div class="empty-state" style="padding:2rem;">
+                <div style="font-size:2rem; margin-bottom:0.5rem;">🧾</div>
+                <div style="font-weight:500;">No invoices yet</div>
+            </div>`;
+        return;
+    }
+
+    const sorted = [...invoices].sort((a, b) =>
+        new Date(b.created_at) - new Date(a.created_at)
+    );
+
+    container.innerHTML = sorted.map(inv => {
+        const client = allClients.find(c => c.id === inv.client_id);
+        return `
+        <div class="invoice-row">
+            <div>
+                <div class="invoice-name">${inv.invoice_number}</div>
+                <div class="invoice-meta">
+                    ${client ? client.name : '—'} · Due ${inv.due_date}
+                </div>
+            </div>
+            <div style="display:flex; align-items:center; gap:12px;">
+                <span class="badge badge-${inv.status}">${inv.status}</span>
+                <span class="invoice-amount">${fmt(inv.total_amount)}</span>
+                <div style="display:flex; gap:6px;">
+                    <button class="btn"
+                        onclick="openEditModal(${JSON.stringify(inv).replace(/"/g, '&quot;')})"
+                        style="font-size:11px; padding:3px 10px;
+                               border:1px solid var(--border);">Edit</button>
+                    <button class="btn"
+                        onclick="deleteInvoice(${inv.id}, '${inv.invoice_number}')"
+                        style="font-size:11px; padding:3px 10px;
+                               border:1px solid var(--border);
+                               color:var(--danger);">Delete</button>
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+// ── Live total preview ─────────────────────────────────────────────
+function updateTotal() {
+    const amount  = parseFloat(document.getElementById('f-amount').value) || 0;
+    const taxRate = parseFloat(document.getElementById('f-tax').value)    || 0;
+    const total   = amount + (amount * taxRate / 100);
+    document.getElementById('total-preview').textContent = fmt(total);
+}
+
+// ── Modal helpers ──────────────────────────────────────────────────
+function openAddModal() {
+    editingId = null;
+    document.getElementById('modal-title').textContent = 'New invoice';
+    document.getElementById('status-group').style.display = 'none';
+    clearForm();
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('f-issue').value = today;
+    showModal();
+}
+
+function openEditModal(inv) {
+    editingId = inv.id;
+    document.getElementById('modal-title').textContent = 'Edit invoice';
+    document.getElementById('status-group').style.display = 'block';
+    document.getElementById('f-number').value = inv.invoice_number || '';
+    document.getElementById('f-client').value = inv.client_id      || '';
+    document.getElementById('f-amount').value = inv.amount         || '';
+    document.getElementById('f-tax').value    = inv.tax_rate       || 0;
+    document.getElementById('f-issue').value  = inv.issue_date     || '';
+    document.getElementById('f-due').value    = inv.due_date       || '';
+    document.getElementById('f-status').value = inv.status         || 'draft';
+    document.getElementById('f-notes').value  = inv.notes          || '';
+    updateTotal();
+    showModal();
+}
+
+function showModal() {
+    document.getElementById('modal-overlay').style.display = 'flex';
+}
+
+function closeModal() {
+    document.getElementById('modal-overlay').style.display = 'none';
+    document.getElementById('modal-error').style.display   = 'none';
+    clearForm();
+}
+
+function clearForm() {
+    ['f-number','f-amount','f-issue','f-due','f-notes'].forEach(id => {
+        document.getElementById(id).value = '';
+    });
+    document.getElementById('f-client').value = '';
+    document.getElementById('f-tax').value    = '0';
+    document.getElementById('total-preview').textContent = '$0.00';
+}
+
+async function saveInvoice() {
+    const invoice_number = document.getElementById('f-number').value.trim();
+    const client_id      = document.getElementById('f-client').value;
+    const amount         = document.getElementById('f-amount').value;
+    const issue_date     = document.getElementById('f-issue').value;
+    const due_date       = document.getElementById('f-due').value;
+    const errorEl        = document.getElementById('modal-error');
+
+    if (!invoice_number || !client_id || !amount || !issue_date || !due_date) {
+        errorEl.textContent = 'Please fill in all required fields.';
+        errorEl.style.display = 'block';
+        return;
+    }
+
+    const payload = {
+        invoice_number,
+        client_id:  parseInt(client_id),
+        amount:     parseFloat(amount),
+        tax_rate:   parseFloat(document.getElementById('f-tax').value)   || 0,
+        issue_date,
+        due_date,
+        notes:      document.getElementById('f-notes').value.trim() || null,
+    };
+
+    if (editingId) {
+        payload.status = document.getElementById('f-status').value;
+    }
+
+    const url    = editingId ? `/invoices/${editingId}` : '/invoices/';
+    const method = editingId ? 'PATCH' : 'POST';
+
+    const res = await fetch(url, {
+        method,
+        headers: {
+            'Authorization': 'Bearer ' + token,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+        const data = await res.json();
+        errorEl.textContent = data.detail || 'Save failed.';
+        errorEl.style.display = 'block';
+        return;
+    }
+
+    closeModal();
+    loadInvoices();
+}
+
+async function deleteInvoice(id, number) {
+    if (!confirm(`Delete invoice ${number}?`)) return;
+    await fetch(`/invoices/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': 'Bearer ' + token }
+    });
+    loadInvoices();
+}
+
+document.getElementById('modal-overlay').addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+});
+
+loadClients().then(() => loadInvoices());
+</script>
+{% endblock %}

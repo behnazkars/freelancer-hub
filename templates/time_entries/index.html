@@ -1,0 +1,318 @@
+<!-- templates/time_entries/index.html -->
+{% extends "base.html" %}
+
+{% block title %}Time Tracker — Freelancer Hub{% endblock %}
+{% block page_title %}Time Tracker{% endblock %}
+
+{% block content %}
+
+<div style="display:flex; justify-content:space-between;
+            align-items:center; margin-bottom:1.5rem;">
+    <div style="font-size:13px; color:var(--text-hint);">
+        Log and track your billable hours
+    </div>
+    <button class="btn btn-primary" onclick="openAddModal()">+ Log time</button>
+</div>
+
+<!-- Summary card -->
+<div class="kpi-grid" style="margin-bottom:1.5rem;">
+    <div class="kpi-card">
+        <div class="kpi-label">Total hours</div>
+        <div class="kpi-value" id="total-hours">—</div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-label">This week</div>
+        <div class="kpi-value" id="week-hours">—</div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-label">Entries logged</div>
+        <div class="kpi-value" id="total-entries">—</div>
+    </div>
+</div>
+
+<!-- Entries table -->
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">All time entries</div>
+    </div>
+    <div id="entries-container">
+        <div class="empty-state">Loading...</div>
+    </div>
+</div>
+
+<!-- Modal -->
+<div id="modal-overlay" style="display:none; position:fixed; inset:0;
+     background:rgba(0,0,0,0.3); z-index:200;
+     align-items:center; justify-content:center;">
+    <div style="background:var(--surface); border-radius:var(--radius-lg);
+                padding:1.75rem; width:100%; max-width:420px; margin:1rem;">
+        <div style="display:flex; justify-content:space-between;
+                    align-items:center; margin-bottom:1.25rem;">
+            <h2 style="font-size:16px; font-weight:600;"
+                id="modal-title">Log time</h2>
+            <button onclick="closeModal()"
+                    style="background:none; border:none; font-size:20px;
+                           cursor:pointer; color:var(--text-hint);">×</button>
+        </div>
+
+        <div id="modal-error" class="alert alert-error" style="display:none;"></div>
+
+        <div class="form-group">
+            <label class="form-label">Project <span style="color:var(--danger)">*</span></label>
+            <select id="f-project" class="form-input">
+                <option value="">Select a project...</option>
+            </select>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+            <div class="form-group">
+                <label class="form-label">Hours <span style="color:var(--danger)">*</span></label>
+                <input type="number" id="f-hours" class="form-input"
+                       placeholder="e.g. 2.5" min="0.1" step="0.5">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Date <span style="color:var(--danger)">*</span></label>
+                <input type="date" id="f-date" class="form-input">
+            </div>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Description</label>
+            <input type="text" id="f-description" class="form-input"
+                   placeholder="What did you work on?">
+        </div>
+
+        <div style="display:flex; gap:10px;
+                    justify-content:flex-end; margin-top:1.25rem;">
+            <button class="btn" onclick="closeModal()"
+                    style="border:1px solid var(--border);">Cancel</button>
+            <button class="btn btn-primary" onclick="saveEntry()">Save entry</button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let editingId   = null;
+let allProjects = [];
+let allEntries  = [];
+
+async function loadProjects() {
+    const res = await fetch('/projects/', {
+        headers: { 'Authorization': 'Bearer ' + token }
+    });
+    allProjects = await res.json();
+    const select = document.getElementById('f-project');
+    select.innerHTML = '<option value="">Select a project...</option>' +
+        allProjects.map(p =>
+            `<option value="${p.id}">${p.name}</option>`
+        ).join('');
+}
+
+async function loadEntries() {
+    const res = await fetch('/time-entries/', {
+        headers: { 'Authorization': 'Bearer ' + token }
+    });
+    allEntries = await res.json();
+    renderEntries(allEntries);
+    renderSummary(allEntries);
+}
+
+function renderSummary(entries) {
+    const total = entries.reduce((s, e) => s + e.hours, 0);
+    document.getElementById('total-hours').textContent =
+        total.toFixed(1) + 'h';
+    document.getElementById('total-entries').textContent =
+        entries.length;
+
+    // Calculate this week's hours
+    const now       = new Date();
+    const weekStart = new Date(now);
+    weekStart.setDate(now.getDate() - now.getDay());
+    const weekHours = entries
+        .filter(e => new Date(e.date) >= weekStart)
+        .reduce((s, e) => s + e.hours, 0);
+    document.getElementById('week-hours').textContent =
+        weekHours.toFixed(1) + 'h';
+}
+
+function renderEntries(entries) {
+    const container = document.getElementById('entries-container');
+
+    if (!entries.length) {
+        container.innerHTML = `
+            <div class="empty-state" style="padding:2rem;">
+                <div style="font-size:2rem; margin-bottom:0.5rem;">⏱</div>
+                <div style="font-weight:500;">No time logged yet</div>
+            </div>`;
+        return;
+    }
+
+    // Sort by date descending
+    const sorted = [...entries].sort((a, b) =>
+        new Date(b.date) - new Date(a.date)
+    );
+
+    container.innerHTML = `
+        <table style="width:100%; border-collapse:collapse;">
+            <thead>
+                <tr style="border-bottom:1px solid var(--border);">
+                    <th style="text-align:left; padding:8px 0;
+                               font-size:11px; font-weight:600;
+                               text-transform:uppercase;
+                               letter-spacing:0.05em;
+                               color:var(--text-hint);">Date</th>
+                    <th style="text-align:left; padding:8px 0;
+                               font-size:11px; font-weight:600;
+                               text-transform:uppercase;
+                               letter-spacing:0.05em;
+                               color:var(--text-hint);">Project</th>
+                    <th style="text-align:left; padding:8px 0;
+                               font-size:11px; font-weight:600;
+                               text-transform:uppercase;
+                               letter-spacing:0.05em;
+                               color:var(--text-hint);">Description</th>
+                    <th style="text-align:right; padding:8px 0;
+                               font-size:11px; font-weight:600;
+                               text-transform:uppercase;
+                               letter-spacing:0.05em;
+                               color:var(--text-hint);">Hours</th>
+                    <th style="text-align:right; padding:8px 0;
+                               font-size:11px; font-weight:600;
+                               text-transform:uppercase;
+                               letter-spacing:0.05em;
+                               color:var(--text-hint);">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${sorted.map(e => {
+                    const project = allProjects.find(p => p.id === e.project_id);
+                    return `
+                    <tr style="border-bottom:1px solid var(--border);">
+                        <td style="padding:10px 0; font-size:13px;">
+                            ${e.date}
+                        </td>
+                        <td style="padding:10px 0; font-size:13px;">
+                            ${project ? project.name : '—'}
+                        </td>
+                        <td style="padding:10px 0; font-size:13px;
+                                   color:var(--text-secondary);">
+                            ${e.description || '—'}
+                        </td>
+                        <td style="padding:10px 0; font-size:13px;
+                                   font-weight:600; text-align:right;">
+                            ${e.hours}h
+                        </td>
+                        <td style="padding:10px 0; text-align:right;">
+                            <button class="btn"
+                                onclick="openEditModal(${JSON.stringify(e).replace(/"/g, '&quot;')})"
+                                style="font-size:11px; padding:3px 10px;
+                                       border:1px solid var(--border);
+                                       margin-right:4px;">Edit</button>
+                            <button class="btn"
+                                onclick="deleteEntry(${e.id})"
+                                style="font-size:11px; padding:3px 10px;
+                                       border:1px solid var(--border);
+                                       color:var(--danger);">Delete</button>
+                        </td>
+                    </tr>`;
+                }).join('')}
+            </tbody>
+        </table>`;
+}
+
+function openAddModal() {
+    editingId = null;
+    document.getElementById('modal-title').textContent = 'Log time';
+    clearForm();
+    // Default date to today
+    document.getElementById('f-date').value =
+        new Date().toISOString().split('T')[0];
+    showModal();
+}
+
+function openEditModal(entry) {
+    editingId = entry.id;
+    document.getElementById('modal-title').textContent = 'Edit entry';
+    document.getElementById('f-project').value     = entry.project_id  || '';
+    document.getElementById('f-hours').value       = entry.hours       || '';
+    document.getElementById('f-date').value        = entry.date        || '';
+    document.getElementById('f-description').value = entry.description || '';
+    showModal();
+}
+
+function showModal() {
+    document.getElementById('modal-overlay').style.display = 'flex';
+}
+
+function closeModal() {
+    document.getElementById('modal-overlay').style.display = 'none';
+    document.getElementById('modal-error').style.display   = 'none';
+    clearForm();
+}
+
+function clearForm() {
+    ['f-hours','f-date','f-description'].forEach(id => {
+        document.getElementById(id).value = '';
+    });
+    document.getElementById('f-project').value = '';
+}
+
+async function saveEntry() {
+    const project_id  = document.getElementById('f-project').value;
+    const hours       = document.getElementById('f-hours').value;
+    const date        = document.getElementById('f-date').value;
+    const errorEl     = document.getElementById('modal-error');
+
+    if (!project_id || !hours || !date) {
+        errorEl.textContent = 'Project, hours and date are required.';
+        errorEl.style.display = 'block';
+        return;
+    }
+
+    const payload = {
+        project_id:  parseInt(project_id),
+        hours:       parseFloat(hours),
+        date,
+        description: document.getElementById('f-description').value.trim() || null,
+    };
+
+    const url    = editingId ? `/time-entries/${editingId}` : '/time-entries/';
+    const method = editingId ? 'PATCH' : 'POST';
+
+    const res = await fetch(url, {
+        method,
+        headers: {
+            'Authorization': 'Bearer ' + token,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+        const data = await res.json();
+        errorEl.textContent = data.detail || 'Save failed.';
+        errorEl.style.display = 'block';
+        return;
+    }
+
+    closeModal();
+    loadEntries();
+}
+
+async function deleteEntry(id) {
+    if (!confirm('Delete this time entry?')) return;
+    await fetch(`/time-entries/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': 'Bearer ' + token }
+    });
+    loadEntries();
+}
+
+document.getElementById('modal-overlay').addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+});
+
+loadProjects().then(() => loadEntries());
+</script>
+{% endblock %}

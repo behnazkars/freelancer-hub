@@ -1,0 +1,276 @@
+<!-- templates/projects/index.html -->
+{% extends "base.html" %}
+
+{% block title %}Projects — Freelancer Hub{% endblock %}
+{% block page_title %}Projects{% endblock %}
+
+{% block content %}
+
+<div style="display:flex; justify-content:space-between;
+            align-items:center; margin-bottom:1.5rem;">
+    <div style="font-size:13px; color:var(--text-hint);">
+        Track your active work
+    </div>
+    <button class="btn btn-primary" onclick="openAddModal()">+ New project</button>
+</div>
+
+<div id="projects-container">
+    <div class="empty-state">Loading...</div>
+</div>
+
+<!-- Modal -->
+<div id="modal-overlay" style="display:none; position:fixed; inset:0;
+     background:rgba(0,0,0,0.3); z-index:200;
+     align-items:center; justify-content:center;">
+    <div style="background:var(--surface); border-radius:var(--radius-lg);
+                padding:1.75rem; width:100%; max-width:460px; margin:1rem;">
+        <div style="display:flex; justify-content:space-between;
+                    align-items:center; margin-bottom:1.25rem;">
+            <h2 style="font-size:16px; font-weight:600;"
+                id="modal-title">New project</h2>
+            <button onclick="closeModal()"
+                    style="background:none; border:none;
+                           font-size:20px; cursor:pointer;
+                           color:var(--text-hint);">×</button>
+        </div>
+
+        <div id="modal-error" class="alert alert-error" style="display:none;"></div>
+
+        <div class="form-group">
+            <label class="form-label">Project name <span style="color:var(--danger)">*</span></label>
+            <input type="text" id="f-name" class="form-input" placeholder="e.g. Website Redesign">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Client <span style="color:var(--danger)">*</span></label>
+            <select id="f-client" class="form-input">
+                <option value="">Select a client...</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Description</label>
+            <textarea id="f-description" class="form-input" rows="2"
+                      style="resize:vertical;"
+                      placeholder="Brief project description"></textarea>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+            <div class="form-group">
+                <label class="form-label">Hourly rate ($)</label>
+                <input type="number" id="f-rate" class="form-input"
+                       placeholder="0.00" min="0" step="0.01">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Budget ($)</label>
+                <input type="number" id="f-budget" class="form-input"
+                       placeholder="Optional" min="0" step="0.01">
+            </div>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Status</label>
+            <select id="f-status" class="form-input">
+                <option value="active">Active</option>
+                <option value="on_hold">On hold</option>
+                <option value="completed">Completed</option>
+                <option value="cancelled">Cancelled</option>
+            </select>
+        </div>
+
+        <div style="display:flex; gap:10px;
+                    justify-content:flex-end; margin-top:1.25rem;">
+            <button class="btn" onclick="closeModal()"
+                    style="border:1px solid var(--border);">Cancel</button>
+            <button class="btn btn-primary" onclick="saveProject()">Save project</button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let editingId = null;
+let allClients = [];
+
+// ── Load clients for dropdown ──────────────────────────────────────
+async function loadClients() {
+    const res = await fetch('/clients/', {
+        headers: { 'Authorization': 'Bearer ' + token }
+    });
+    allClients = await res.json();
+
+    const select = document.getElementById('f-client');
+    select.innerHTML = '<option value="">Select a client...</option>' +
+        allClients.map(c =>
+            `<option value="${c.id}">${c.name}</option>`
+        ).join('');
+}
+
+// ── Load and render projects ───────────────────────────────────────
+async function loadProjects() {
+    const res = await fetch('/projects/', {
+        headers: { 'Authorization': 'Bearer ' + token }
+    });
+    const projects = await res.json();
+    renderProjects(projects);
+}
+
+function renderProjects(projects) {
+    const container = document.getElementById('projects-container');
+
+    if (!projects.length) {
+        container.innerHTML = `
+            <div class="empty-state" style="padding:3rem;">
+                <div style="font-size:2rem; margin-bottom:0.5rem;">📁</div>
+                <div style="font-weight:500; margin-bottom:0.25rem;">
+                    No projects yet</div>
+                <div>Create a client first, then add projects.</div>
+            </div>`;
+        return;
+    }
+
+    container.innerHTML = `
+        <div style="display:grid;
+                    grid-template-columns:repeat(auto-fill, minmax(300px,1fr));
+                    gap:14px;">
+            ${projects.map(p => {
+                const client = allClients.find(c => c.id === p.client_id);
+                return `
+                <div class="card">
+                    <div style="display:flex; justify-content:space-between;
+                                align-items:flex-start; margin-bottom:0.75rem;">
+                        <div>
+                            <div style="font-weight:600; font-size:14px;
+                                        margin-bottom:2px;">${p.name}</div>
+                            <div style="font-size:12px; color:var(--text-hint);">
+                                ${client ? client.name : 'Unknown client'}
+                            </div>
+                        </div>
+                        <span class="badge badge-${p.status}">${p.status}</span>
+                    </div>
+                    ${p.description ? `
+                        <div style="font-size:12.5px; color:var(--text-secondary);
+                                    margin-bottom:0.75rem;">${p.description}</div>` : ''}
+                    <div style="display:flex; gap:16px; font-size:12px;
+                                color:var(--text-hint); margin-bottom:1rem;">
+                        <span>💰 $${p.hourly_rate}/hr</span>
+                        ${p.budget ? `<span>🎯 Budget: $${p.budget}</span>` : ''}
+                    </div>
+                    <div style="display:flex; gap:8px;">
+                        <button class="btn"
+                            onclick="openEditModal(${JSON.stringify(p).replace(/"/g, '&quot;')})"
+                            style="font-size:12px; padding:4px 12px;
+                                   border:1px solid var(--border); flex:1;">
+                            Edit
+                        </button>
+                        <button class="btn"
+                            onclick="deleteProject(${p.id}, '${p.name}')"
+                            style="font-size:12px; padding:4px 12px;
+                                   border:1px solid var(--border);
+                                   color:var(--danger); flex:1;">
+                            Delete
+                        </button>
+                    </div>
+                </div>`;
+            }).join('')}
+        </div>`;
+}
+
+// ── Modal helpers ──────────────────────────────────────────────────
+function openAddModal() {
+    editingId = null;
+    document.getElementById('modal-title').textContent = 'New project';
+    clearForm();
+    showModal();
+}
+
+function openEditModal(project) {
+    editingId = project.id;
+    document.getElementById('modal-title').textContent = 'Edit project';
+    document.getElementById('f-name').value        = project.name        || '';
+    document.getElementById('f-client').value      = project.client_id   || '';
+    document.getElementById('f-description').value = project.description || '';
+    document.getElementById('f-rate').value        = project.hourly_rate || '';
+    document.getElementById('f-budget').value      = project.budget      || '';
+    document.getElementById('f-status').value      = project.status      || 'active';
+    showModal();
+}
+
+function showModal() {
+    document.getElementById('modal-overlay').style.display = 'flex';
+}
+
+function closeModal() {
+    document.getElementById('modal-overlay').style.display = 'none';
+    document.getElementById('modal-error').style.display = 'none';
+    clearForm();
+}
+
+function clearForm() {
+    ['f-name','f-description','f-rate','f-budget'].forEach(id => {
+        document.getElementById(id).value = '';
+    });
+    document.getElementById('f-client').value = '';
+    document.getElementById('f-status').value = 'active';
+}
+
+// ── Save ───────────────────────────────────────────────────────────
+async function saveProject() {
+    const name      = document.getElementById('f-name').value.trim();
+    const client_id = document.getElementById('f-client').value;
+    const errorEl   = document.getElementById('modal-error');
+
+    if (!name || !client_id) {
+        errorEl.textContent = 'Name and client are required.';
+        errorEl.style.display = 'block';
+        return;
+    }
+
+    const payload = {
+        name,
+        client_id:   parseInt(client_id),
+        description: document.getElementById('f-description').value.trim() || null,
+        hourly_rate: parseFloat(document.getElementById('f-rate').value)   || 0,
+        budget:      parseFloat(document.getElementById('f-budget').value) || null,
+        status:      document.getElementById('f-status').value,
+    };
+
+    const url    = editingId ? `/projects/${editingId}` : '/projects/';
+    const method = editingId ? 'PATCH' : 'POST';
+
+    const res = await fetch(url, {
+        method,
+        headers: {
+            'Authorization': 'Bearer ' + token,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+        const data = await res.json();
+        errorEl.textContent = data.detail || 'Save failed.';
+        errorEl.style.display = 'block';
+        return;
+    }
+
+    closeModal();
+    loadProjects();
+}
+
+// ── Delete ─────────────────────────────────────────────────────────
+async function deleteProject(id, name) {
+    if (!confirm(`Delete "${name}"? All time entries will be deleted too.`)) return;
+    await fetch(`/projects/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': 'Bearer ' + token }
+    });
+    loadProjects();
+}
+
+document.getElementById('modal-overlay').addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+});
+
+// Load clients first so dropdown is populated, then load projects
+loadClients().then(() => loadProjects());
+</script>
+{% endblock %}

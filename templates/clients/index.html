@@ -1,0 +1,240 @@
+<!-- templates/clients/index.html -->
+{% extends "base.html" %}
+
+{% block title %}Clients — Freelancer Hub{% endblock %}
+{% block page_title %}Clients{% endblock %}
+
+{% block content %}
+
+<!-- Header row -->
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
+    <div>
+        <div style="font-size:13px; color:var(--text-hint);">
+            Manage your client relationships
+        </div>
+    </div>
+    <button class="btn btn-primary" onclick="openAddModal()">
+        + New client
+    </button>
+</div>
+
+<!-- Clients grid -->
+<div id="clients-container">
+    <div class="empty-state">Loading...</div>
+</div>
+
+<!-- Add/Edit Modal -->
+<div id="modal-overlay" style="display:none; position:fixed; inset:0;
+     background:rgba(0,0,0,0.3); z-index:200; align-items:center; justify-content:center;">
+    <div style="background:var(--surface); border-radius:var(--radius-lg);
+                padding:1.75rem; width:100%; max-width:460px; margin:1rem;">
+        <div style="display:flex; justify-content:space-between;
+                    align-items:center; margin-bottom:1.25rem;">
+            <h2 style="font-size:16px; font-weight:600;" id="modal-title">New client</h2>
+            <button onclick="closeModal()"
+                    style="background:none; border:none; font-size:20px;
+                           cursor:pointer; color:var(--text-hint);">×</button>
+        </div>
+
+        <div id="modal-error" class="alert alert-error" style="display:none;"></div>
+
+        <div class="form-group">
+            <label class="form-label">Name <span style="color:var(--danger)">*</span></label>
+            <input type="text" id="f-name" class="form-input" placeholder="Client name">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Email</label>
+            <input type="email" id="f-email" class="form-input" placeholder="client@example.com">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Phone</label>
+            <input type="text" id="f-phone" class="form-input" placeholder="+1 234 567 8900">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Company</label>
+            <input type="text" id="f-company" class="form-input" placeholder="Company name">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Notes</label>
+            <textarea id="f-notes" class="form-input" rows="2"
+                      placeholder="Any notes..." style="resize:vertical;"></textarea>
+        </div>
+
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:1.25rem;">
+            <button class="btn" onclick="closeModal()"
+                    style="border:1px solid var(--border);">Cancel</button>
+            <button class="btn btn-primary" onclick="saveClient()">Save client</button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let editingId = null;
+
+// ── Load and render clients ────────────────────────────────────────
+async function loadClients() {
+    const res = await fetch('/clients/', {
+        headers: { 'Authorization': 'Bearer ' + token }
+    });
+    const clients = await res.json();
+    renderClients(clients);
+}
+
+function renderClients(clients) {
+    const container = document.getElementById('clients-container');
+
+    if (!clients.length) {
+        container.innerHTML = `
+            <div class="empty-state" style="padding:3rem;">
+                <div style="font-size:2rem; margin-bottom:0.5rem;">👥</div>
+                <div style="font-weight:500; margin-bottom:0.25rem;">No clients yet</div>
+                <div>Click "New client" to add your first one.</div>
+            </div>`;
+        return;
+    }
+
+    // Render a card grid
+    container.innerHTML = `
+        <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px,1fr)); gap:14px;">
+            ${clients.map(c => `
+            <div class="card" style="position:relative;">
+                <div style="display:flex; align-items:center;
+                            gap:12px; margin-bottom:0.75rem;">
+                    <div class="avatar" style="width:38px; height:38px; font-size:14px;">
+                        ${initials(c.name)}
+                    </div>
+                    <div>
+                        <div style="font-weight:600; font-size:14px;">${c.name}</div>
+                        <div style="font-size:12px; color:var(--text-hint);">
+                            ${c.company || '—'}
+                        </div>
+                    </div>
+                </div>
+                <div style="font-size:12.5px; color:var(--text-secondary);
+                            display:flex; flex-direction:column; gap:4px;">
+                    ${c.email ? `<span>✉ ${c.email}</span>` : ''}
+                    ${c.phone ? `<span>📞 ${c.phone}</span>` : ''}
+                    ${c.notes ? `<span style="color:var(--text-hint);">
+                        ${c.notes}</span>` : ''}
+                </div>
+                <div style="display:flex; gap:8px; margin-top:1rem;">
+                    <button class="btn" onclick="openEditModal(${JSON.stringify(c).replace(/"/g, '&quot;')})"
+                        style="font-size:12px; padding:4px 12px;
+                               border:1px solid var(--border); flex:1;">
+                        Edit
+                    </button>
+                    <button class="btn" onclick="deleteClient(${c.id}, '${c.name}')"
+                        style="font-size:12px; padding:4px 12px;
+                               border:1px solid var(--border);
+                               color:var(--danger); flex:1;">
+                        Delete
+                    </button>
+                </div>
+            </div>`).join('')}
+        </div>`;
+}
+
+// ── Modal helpers ──────────────────────────────────────────────────
+function initials(name) {
+    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+}
+
+function openAddModal() {
+    editingId = null;
+    document.getElementById('modal-title').textContent = 'New client';
+    clearForm();
+    showModal();
+}
+
+function openEditModal(client) {
+    editingId = client.id;
+    document.getElementById('modal-title').textContent = 'Edit client';
+    document.getElementById('f-name').value    = client.name    || '';
+    document.getElementById('f-email').value   = client.email   || '';
+    document.getElementById('f-phone').value   = client.phone   || '';
+    document.getElementById('f-company').value = client.company || '';
+    document.getElementById('f-notes').value   = client.notes   || '';
+    showModal();
+}
+
+function showModal() {
+    const overlay = document.getElementById('modal-overlay');
+    overlay.style.display = 'flex';
+}
+
+function closeModal() {
+    document.getElementById('modal-overlay').style.display = 'none';
+    document.getElementById('modal-error').style.display = 'none';
+    clearForm();
+}
+
+function clearForm() {
+    ['f-name','f-email','f-phone','f-company','f-notes']
+        .forEach(id => document.getElementById(id).value = '');
+}
+
+// ── Save (create or update) ────────────────────────────────────────
+async function saveClient() {
+    const name = document.getElementById('f-name').value.trim();
+    const errorEl = document.getElementById('modal-error');
+
+    if (!name) {
+        errorEl.textContent = 'Name is required.';
+        errorEl.style.display = 'block';
+        return;
+    }
+
+    const payload = {
+        name,
+        email:   document.getElementById('f-email').value.trim()   || null,
+        phone:   document.getElementById('f-phone').value.trim()   || null,
+        company: document.getElementById('f-company').value.trim() || null,
+        notes:   document.getElementById('f-notes').value.trim()   || null,
+    };
+
+    const url    = editingId ? `/clients/${editingId}` : '/clients/';
+    const method = editingId ? 'PATCH' : 'POST';
+
+    const res = await fetch(url, {
+        method,
+        headers: {
+            'Authorization': 'Bearer ' + token,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+        const data = await res.json();
+        errorEl.textContent = data.detail || 'Save failed.';
+        errorEl.style.display = 'block';
+        return;
+    }
+
+    closeModal();
+    loadClients();
+}
+
+// ── Delete ─────────────────────────────────────────────────────────
+async function deleteClient(id, name) {
+    if (!confirm(`Delete "${name}"? This will also delete all their projects and invoices.`)) return;
+
+    await fetch(`/clients/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': 'Bearer ' + token }
+    });
+
+    loadClients();
+}
+
+// Close modal when clicking outside
+document.getElementById('modal-overlay').addEventListener('click', function(e) {
+    if (e.target === this) closeModal();
+});
+
+loadClients();
+</script>
+{% endblock %}
