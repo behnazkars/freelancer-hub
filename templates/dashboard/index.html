@@ -1,0 +1,198 @@
+<!-- templates/dashboard/index.html -->
+{% extends "base.html" %}
+
+{% block title %}Dashboard — Freelancer Hub{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+
+<!-- KPI cards — populated by JS -->
+<div class="kpi-grid">
+    <div class="kpi-card">
+        <div class="kpi-label">Total revenue</div>
+        <div class="kpi-value" id="kpi-revenue">—</div>
+        <div class="kpi-sub" id="kpi-revenue-sub"></div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-label">Active projects</div>
+        <div class="kpi-value" id="kpi-projects">—</div>
+        <div class="kpi-sub" id="kpi-clients-sub"></div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-label">Hours logged</div>
+        <div class="kpi-value" id="kpi-hours">—</div>
+        <div class="kpi-sub">total tracked</div>
+    </div>
+    <div class="kpi-card">
+        <div class="kpi-label">Unpaid invoices</div>
+        <div class="kpi-value" id="kpi-unpaid">—</div>
+        <div class="kpi-sub negative" id="kpi-overdue-sub"></div>
+    </div>
+</div>
+
+<!-- Charts row -->
+<div class="two-col">
+    <!-- Revenue by client -->
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">Revenue by client</div>
+        </div>
+        <div id="revenue-chart">
+            <div class="empty-state">Loading...</div>
+        </div>
+    </div>
+
+    <!-- Hours by project -->
+    <div class="card">
+        <div class="card-header">
+            <div class="card-title">Hours by project</div>
+        </div>
+        <div id="hours-chart">
+            <div class="empty-state">Loading...</div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent invoices -->
+<div class="card">
+    <div class="card-header">
+        <div class="card-title">Recent invoices</div>
+        <a href="/invoices" class="btn btn-primary"
+           style="font-size:12px; padding:4px 12px;">View all</a>
+    </div>
+    <div id="recent-invoices">
+        <div class="empty-state">Loading...</div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+
+
+// ── Helpers ────────────────────────────────────────────────────────
+function fmt(amount) {
+    return '$' + Number(amount).toLocaleString('en-US', {
+        minimumFractionDigits: 2, maximumFractionDigits: 2
+    });
+}
+
+function badgeHTML(status) {
+    return `<span class="badge badge-${status}">${status}</span>`;
+}
+
+// ── Render bar chart ───────────────────────────────────────────────
+function renderBars(containerId, items, labelKey, valueKey, color, formatter) {
+    const container = document.getElementById(containerId);
+
+    if (!items || items.length === 0) {
+        container.innerHTML = '<div class="empty-state">No data yet</div>';
+        return;
+    }
+
+    // Find the maximum value to scale bars
+    const max = Math.max(...items.map(i => i[valueKey]));
+
+    container.innerHTML = items.map(item => {
+        const pct = max > 0 ? (item[valueKey] / max * 100).toFixed(1) : 0;
+        const label = formatter(item[valueKey]);
+        return `
+        <div class="bar-row">
+            <span class="bar-label" title="${item[labelKey]}">${item[labelKey]}</span>
+            <div class="bar-track">
+                <div class="bar-fill ${color}" style="width:${pct}%"></div>
+            </div>
+            <span class="bar-amount">${label}</span>
+        </div>`;
+    }).join('');
+}
+
+// ── Render invoice list ────────────────────────────────────────────
+function renderInvoices(invoices) {
+    const container = document.getElementById('recent-invoices');
+
+    if (!invoices || invoices.length === 0) {
+        container.innerHTML = '<div class="empty-state">No invoices yet</div>';
+        return;
+    }
+
+    container.innerHTML = invoices.map(inv => `
+        <div class="invoice-row">
+            <div>
+                <div class="invoice-name">${inv.invoice_number}</div>
+                <div class="invoice-meta">Due ${inv.due_date}</div>
+            </div>
+            <div style="display:flex; align-items:center; gap:12px;">
+                ${badgeHTML(inv.status)}
+                <span class="invoice-amount">${fmt(inv.amount)}</span>
+            </div>
+        </div>
+    `).join('');
+}
+
+// ── Load dashboard data ────────────────────────────────────────────
+async function loadDashboard() {
+    try {
+        const res = await fetch('/analytics/dashboard', {
+            headers: { 'Authorization': 'Bearer ' + token }
+        });
+
+        if (res.status === 401) {
+            localStorage.removeItem('access_token');
+            window.location.href = '/login';
+            return;
+        }
+
+        const data = await res.json();
+        const kpis = data.kpis;
+
+        // Populate KPI cards
+        document.getElementById('kpi-revenue').textContent =
+            fmt(kpis.total_revenue);
+
+        document.getElementById('kpi-projects').textContent =
+            kpis.active_projects;
+        document.getElementById('kpi-clients-sub').textContent =
+            `across ${kpis.total_clients} client${kpis.total_clients !== 1 ? 's' : ''}`;
+
+        document.getElementById('kpi-hours').textContent =
+            kpis.total_hours + 'h';
+
+        document.getElementById('kpi-unpaid').textContent =
+            fmt(kpis.unpaid_amount);
+
+        const overdueEl = document.getElementById('kpi-overdue-sub');
+        if (kpis.overdue_invoices > 0) {
+            overdueEl.textContent = kpis.overdue_invoices + ' overdue';
+            overdueEl.classList.add('negative');
+        } else {
+            overdueEl.textContent = 'All invoices current';
+        }
+
+        // Render charts
+        renderBars(
+            'revenue-chart',
+            data.revenue_by_client,
+            'name', 'total', '',
+            v => fmt(v)
+        );
+
+        renderBars(
+            'hours-chart',
+            data.hours_by_project,
+            'name', 'total', 'green',
+            v => v + 'h'
+        );
+
+        // Render recent invoices
+        renderInvoices(data.recent_invoices);
+
+    } catch (e) {
+        console.error('Failed to load dashboard', e);
+    }
+}
+
+loadDashboard();
+</script>
+{% endblock %}

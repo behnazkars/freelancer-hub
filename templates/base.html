@@ -1,0 +1,121 @@
+<!-- templates/base.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Freelancer Hub{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/main.css">
+</head>
+<body>
+
+<div class="app-layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="sidebar-logo">
+            <span>💼</span> Freelancer Hub
+        </div>
+
+        <nav class="sidebar-nav">
+            <div class="nav-section-label">Main</div>
+            <a href="/dashboard" class="nav-item {% if active_page == 'dashboard' %}active{% endif %}">
+                <span class="icon">📊</span> Dashboard
+            </a>
+            <a href="/clients" class="nav-item {% if active_page == 'clients' %}active{% endif %}">
+                <span class="icon">👥</span> Clients
+            </a>
+            <a href="/projects" class="nav-item {% if active_page == 'projects' %}active{% endif %}">
+                <span class="icon">📁</span> Projects
+            </a>
+
+            <div class="nav-section-label">Work</div>
+            <a href="/time-entries" class="nav-item {% if active_page == 'time' %}active{% endif %}">
+                <span class="icon">⏱</span> Time Tracker
+            </a>
+            <a href="/invoices" class="nav-item {% if active_page == 'invoices' %}active{% endif %}">
+                <span class="icon">🧾</span> Invoices
+            </a>
+        </nav>
+
+        <div class="sidebar-footer">
+            <div class="sidebar-user">
+                <div class="avatar" id="user-avatar">--</div>
+                <div>
+                    <div class="sidebar-user-name" id="user-name">Loading...</div>
+                    <div class="sidebar-user-email" id="user-email"></div>
+                </div>
+            </div>
+            <a href="/logout" style="font-size:12px; color:var(--text-hint);">Sign out</a>
+        </div>
+    </aside>
+
+    <!-- Main content -->
+    <div class="main-content">
+        <header class="topbar">
+            <div class="topbar-title">{% block page_title %}{% endblock %}</div>
+            <div class="topbar-right">
+                <span id="topbar-date"></span>
+            </div>
+        </header>
+
+        <main class="page-body">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+</div>
+
+<script>
+    // ── Auth guard ───────────────────────────────────────────────
+    // Every protected page checks for a token.
+    // If missing, redirect to login immediately.
+    const token = localStorage.getItem('access_token');
+    if (!token && window.location.pathname !== '/login'
+               && window.location.pathname !== '/register') {
+        window.location.href = '/login';
+    }
+
+    // ── Load user info into sidebar ──────────────────────────────
+    async function loadUser() {
+        if (!token) return;
+        try {
+            const res = await fetch('/auth/me', {
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            if (res.status === 401) {
+                localStorage.removeItem('access_token');
+                window.location.href = '/login';
+                return;
+            }
+            const user = await res.json();
+
+            // Set avatar initials from full name
+            const initials = user.full_name
+                .split(' ')
+                .map(n => n[0])
+                .join('')
+                .toUpperCase()
+                .slice(0, 2);
+
+            document.getElementById('user-avatar').textContent = initials;
+            document.getElementById('user-name').textContent = user.full_name;
+            document.getElementById('user-email').textContent = user.email;
+        } catch (e) {
+            console.error('Failed to load user', e);
+        }
+    }
+
+    // ── Date in topbar ───────────────────────────────────────────
+    const dateEl = document.getElementById('topbar-date');
+    if (dateEl) {
+        dateEl.textContent = new Date().toLocaleDateString('en-US', {
+            weekday: 'long', year: 'numeric',
+            month: 'long', day: 'numeric'
+        });
+    }
+
+    loadUser();
+</script>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>

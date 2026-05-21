@@ -1,0 +1,94 @@
+<!-- templates/register.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create account — Freelancer Hub</title>
+    <link rel="stylesheet" href="/static/css/main.css">
+</head>
+<body>
+<div class="auth-wrapper">
+    <div class="auth-card">
+        <div class="auth-logo">💼 Freelancer Hub</div>
+        <div class="auth-subtitle">Create your free account</div>
+
+        <div id="error-msg"   class="alert alert-error"   style="display:none"></div>
+        <div id="success-msg" class="alert alert-success" style="display:none"></div>
+
+        <div class="form-group">
+            <label class="form-label">Full name</label>
+            <input type="text" id="full_name" class="form-input"
+                   placeholder="Jane Smith">
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">Email address</label>
+            <input type="email" id="email" class="form-input"
+                   placeholder="you@example.com">
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">Password</label>
+            <input type="password" id="password" class="form-input"
+                   placeholder="At least 8 characters">
+        </div>
+
+        <button class="btn btn-primary btn-full" onclick="handleRegister()">
+            Create account
+        </button>
+
+        <p style="text-align:center; margin-top:1rem; font-size:13px; color:var(--text-hint)">
+            Already have an account?
+            <a href="/login">Sign in</a>
+        </p>
+    </div>
+</div>
+
+<script>
+    async function handleRegister() {
+        const full_name = document.getElementById('full_name').value.trim();
+        const email     = document.getElementById('email').value.trim();
+        const password  = document.getElementById('password').value;
+        const errorEl   = document.getElementById('error-msg');
+        const successEl = document.getElementById('success-msg');
+
+        errorEl.style.display = 'none';
+
+        if (!full_name || !email || !password) {
+            errorEl.textContent = 'Please fill in all fields.';
+            errorEl.style.display = 'block';
+            return;
+        }
+
+        try {
+            const res = await fetch('/auth/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ full_name, email, password })
+            });
+
+            const data = await res.json();
+
+            if (!res.ok) {
+                errorEl.textContent = data.detail || 'Registration failed.';
+                errorEl.style.display = 'block';
+                return;
+            }
+
+            successEl.textContent = 'Account created! Redirecting to login...';
+            successEl.style.display = 'block';
+            setTimeout(() => window.location.href = '/login', 1500);
+
+        } catch (e) {
+            errorEl.textContent = 'Connection error. Please try again.';
+            errorEl.style.display = 'block';
+        }
+    }
+
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Enter') handleRegister();
+    });
+</script>
+</body>
+</html>
