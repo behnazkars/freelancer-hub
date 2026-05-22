@@ -2,6 +2,8 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from fastapi.middleware.cors import CORSMiddleware
+from pathlib import Path
 
 from app.config import settings
 from app.database import engine, Base
@@ -12,6 +14,10 @@ from app.routers import auth,  clients, projects, time_entries, invoices, analyt
 # Import models so Base knows about them before create_all
 import app.models  # noqa: F401
 
+BASE_DIR      = Path(__file__).resolve().parent.parent
+TEMPLATES_DIR = BASE_DIR / "templates"
+STATIC_DIR    = BASE_DIR / "static"
+
 # Create the FastAPI application instance
 # This is the core object — everything plugs into it
 app = FastAPI(
@@ -19,6 +25,15 @@ app = FastAPI(
     description="A business management hub for freelancers.",
     version="0.1.0",
     debug=settings.debug,
+)
+
+# CORS — controls which domains can talk to your API
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Create all database tables on startup

@@ -5,6 +5,21 @@ from sqlalchemy.orm import sessionmaker
 
 from app.config import settings
 
+
+# Render gives us a PostgreSQL URL starting with "postgres://"
+# but SQLAlchemy needs "postgresql://"
+# This one line fixes that automatically
+database_url = settings.database_url.replace(
+    "postgres://", "postgresql://", 1
+)
+
+# SQLite needs the check_same_thread argument
+# PostgreSQL does not — so we only add it for SQLite
+connect_args = {}
+if database_url.startswith("sqlite"):
+    connect_args = {"check_same_thread": False}
+
+    
 # The Engine is the starting point of SQLAlchemy.
 # It manages the connection to the database.
 # We create it ONCE and reuse it for the entire app lifetime.
