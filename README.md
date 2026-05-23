@@ -14,7 +14,7 @@ Password: `demo1234`
 
 ## Screenshots
 
-![Dashboard](screenshots/dashboard.png)
+![Dashboard](screenshots/dashboard.PNG)
 ![Clients](screenshots/clients.png)
 ![Invoices](screenshots/invoices.png)
 ![Projects](screenshots/projects.png)
