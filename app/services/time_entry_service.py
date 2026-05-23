@@ -79,15 +79,20 @@ def create_time_entry(
 
 
 def update_time_entry(
-    db: Session,
-    entry_id: int,
-    entry_data: TimeEntryUpdate,
-    user_id: int
+    db: Session, entry_id: int, entry_data: TimeEntryUpdate, user_id: int
 ) -> TimeEntry:
-    """Update only the fields that were sent."""
+    """Update a time entry."""
     entry = get_time_entry_by_id(db, entry_id, user_id)
 
     update_data = entry_data.model_dump(exclude_unset=True)
+
+    # Convert date string to Python date object if present
+    # We accept date as string in the schema to avoid Pydantic v2
+    # Optional[date] coercion bug, so we convert manually here
+    if "date" in update_data and isinstance(update_data["date"], str):
+        from datetime import date as date_type
+        update_data["date"] = date_type.fromisoformat(update_data["date"])
+
     for field, value in update_data.items():
         setattr(entry, field, value)
 

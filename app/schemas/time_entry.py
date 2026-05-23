@@ -4,24 +4,19 @@ from datetime import date, datetime
 from typing import Optional
 
 
-# ─── Request schemas ──────────────────────────────────────────────
-
 class TimeEntryCreate(BaseModel):
-    """Data required to log a new time entry."""
     project_id: int
     hours: float
     description: Optional[str] = None
-    date: date  # expects format: "2024-01-15"
+    date: date
 
 
 class TimeEntryUpdate(BaseModel):
-    """All fields optional — only send what you want to change."""
-    hours: Optional[float] = None
-    description: Optional[str] = None
-    date: Optional[date] = None
+    project_id:  Optional[int]   = None
+    hours:       Optional[float] = None
+    description: Optional[str]   = None
+    date:        Optional[str]   = None  # string to avoid Pydantic v2 Optional[date] bug
 
-
-# ─── Response schemas ─────────────────────────────────────────────
 
 class TimeEntryResponse(BaseModel):
     id: int

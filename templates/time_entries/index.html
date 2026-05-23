@@ -274,15 +274,26 @@ async function saveEntry() {
         return;
     }
 
-    const payload = {
-        project_id:  parseInt(project_id),
-        hours:       parseFloat(hours),
-        date,
-        description: document.getElementById('f-description').value.trim() || null,
-    };
+    // Build payload based on create vs edit
+    // PATCH (edit) doesn't include project_id — schema doesn't allow changing it
+    // POST (create) includes project_id — required for new entries
+    const payload = editingId
+        ? {
+            hours:       parseFloat(hours),
+            date,
+            description: document.getElementById('f-description').value.trim() || null,
+          }
+        : {
+            project_id:  parseInt(project_id),
+            hours:       parseFloat(hours),
+            date,
+            description: document.getElementById('f-description').value.trim() || null,
+          };
 
     const url    = editingId ? `/time-entries/${editingId}` : '/time-entries/';
     const method = editingId ? 'PATCH' : 'POST';
+
+    
 
     const res = await fetch(url, {
         method,
