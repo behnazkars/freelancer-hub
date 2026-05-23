@@ -15,11 +15,11 @@ Password: `demo1234`
 ## Screenshots
 
 ![Dashboard](screenshots/dashboard.PNG)
-![Clients](screenshots/clients.png)
-![Invoices](screenshots/invoices.png)
-![Projects](screenshots/projects.png)
-![TimeLog](screenshots/timelog.png)
-![Login](screenshots/login.png)
+![Clients](screenshots/clients.PNG)
+![Invoices](screenshots/invoices.PNG)
+![Projects](screenshots/projects.PNG)
+![TimeLog](screenshots/timelog.PNG)
+![Login](screenshots/login.PNG)
 
 ## Features
 
