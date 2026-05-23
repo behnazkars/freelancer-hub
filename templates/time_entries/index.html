@@ -205,7 +205,7 @@ function renderEntries(entries) {
                         </td>
                         <td style="padding:10px 0; text-align:right;">
                             <button class="btn"
-                                onclick="openEditModal(${JSON.stringify(e).replace(/"/g, '&quot;')})"
+                                onclick="openEditModal(${e.id})"
                                 style="font-size:11px; padding:3px 10px;
                                        border:1px solid var(--border);
                                        margin-right:4px;">Edit</button>
@@ -231,13 +231,19 @@ function openAddModal() {
     showModal();
 }
 
-function openEditModal(entry) {
+function openEditModal(id) {
+    // Look up the full entry from our in-memory array
+    // No serialization needed — we already have the data
+    const entry = allEntries.find(e => e.id === id);
+    if (!entry) return;
+
     editingId = entry.id;
     document.getElementById('modal-title').textContent = 'Edit entry';
     document.getElementById('f-project').value     = entry.project_id  || '';
     document.getElementById('f-hours').value       = entry.hours       || '';
     document.getElementById('f-date').value        = entry.date        || '';
     document.getElementById('f-description').value = entry.description || '';
+    document.getElementById('modal-error').style.display = 'none';
     showModal();
 }
 
