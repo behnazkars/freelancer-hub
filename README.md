@@ -5,6 +5,13 @@ projects, time tracking and invoicing — with a real-time analytics dashboard.
 
 🔗 **Live demo:** https://freelancer-hub-fw13.onrender.com
 
+## Demo credentials
+
+You can register a new account on the live demo or use:
+
+Email: `demo@freelancerhub.com`
+Password: `demo1234`
+
 ## Screenshots
 
 <!-- Add screenshots after this line -->
