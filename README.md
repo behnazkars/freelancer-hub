@@ -14,7 +14,9 @@ Password: `demo1234`
 
 ## Screenshots
 
-<!-- Add screenshots after this line -->
+![Dashboard](screenshots/dashboard.png)
+![Clients](screenshots/clients.png)
+![Invoices](screenshots/invoices.png)
 
 ## Features
 
