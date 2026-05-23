@@ -225,15 +225,15 @@ function openAddModal() {
     editingId = null;
     document.getElementById('modal-title').textContent = 'Log time';
     clearForm();
-    // Default date to today
     document.getElementById('f-date').value =
         new Date().toISOString().split('T')[0];
+    const errorEl = document.getElementById('modal-error');
+    errorEl.textContent   = '';
+    errorEl.style.display = 'none';
     showModal();
 }
 
 function openEditModal(id) {
-    // Look up the full entry from our in-memory array
-    // No serialization needed — we already have the data
     const entry = allEntries.find(e => e.id === id);
     if (!entry) return;
 
@@ -243,7 +243,9 @@ function openEditModal(id) {
     document.getElementById('f-hours').value       = entry.hours       || '';
     document.getElementById('f-date').value        = entry.date        || '';
     document.getElementById('f-description').value = entry.description || '';
-    document.getElementById('modal-error').style.display = 'none';
+    const errorEl = document.getElementById('modal-error');
+    errorEl.textContent   = '';
+    errorEl.style.display = 'none';
     showModal();
 }
 
@@ -253,7 +255,9 @@ function showModal() {
 
 function closeModal() {
     document.getElementById('modal-overlay').style.display = 'none';
-    document.getElementById('modal-error').style.display   = 'none';
+    const errorEl = document.getElementById('modal-error');
+    errorEl.textContent   = '';
+    errorEl.style.display = 'none';
     clearForm();
 }
 
