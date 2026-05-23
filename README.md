@@ -17,6 +17,9 @@ Password: `demo1234`
 ![Dashboard](screenshots/dashboard.png)
 ![Clients](screenshots/clients.png)
 ![Invoices](screenshots/invoices.png)
+![Projects](screenshots/projects.png)
+![TimeLog](screenshots/timelog.png)
+![Login](screenshots/login.png)
 
 ## Features
 
