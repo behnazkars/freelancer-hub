@@ -74,3 +74,35 @@ Visit `http://127.0.0.1:8000`
 - **Ownership security** — every query filters by user_id to prevent IDOR attacks
 - **Server-side calculations** — tax and totals computed server-side, never trusted from client
 - **Environment-based config** — Pydantic Settings reads from .env locally and env vars in production
+
+
+## Running Tests
+pip install pytest pytest-asyncio httpx pytest-cov
+pytest                          # run all tests
+pytest -v                       # verbose output
+pytest --cov=app                # with coverage
+pytest tests/test_auth.py -v    # single file
+
+### Test structure
+tests/
+
+├── conftest.py          # shared fixtures (DB, client, auth headers)
+
+├── test_auth.py         # register, login, JWT validation
+
+├── test_clients.py      # client CRUD + ownership security
+
+├── test_projects.py     # project CRUD + ownership security
+
+├── test_invoices.py     # invoice CRUD + tax calculation + status transitions
+
+├── test_time_entries.py # time entry CRUD + ownership security
+
+└── test_analytics.py    # dashboard KPIs + calculation correctness
+
+### What the tests cover
+- **Authentication** — register, login, protected routes, inactive users
+- **CRUD operations** — create, read, update, delete for all resources
+- **Ownership security** — users cannot access each other's data
+- **Business logic** — tax calculation, invoice status transitions, KPI math
+- **Error handling** — 404s, 422 validation errors, 401 unauthorized
