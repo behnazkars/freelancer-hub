@@ -18,21 +18,37 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Replace hours + date columns with start_time, end_time, duration."""
+    from alembic import op
+    import sqlalchemy as sa
 
-    # Step 1: Add new columns as NULLABLE first so existing rows don't crash
+    # Step 1: Add new columns as NULLABLE first
     op.add_column('time_entries', sa.Column('start_time', sa.DateTime(timezone=True), nullable=True))
     op.add_column('time_entries', sa.Column('end_time',   sa.DateTime(timezone=True), nullable=True))
     op.add_column('time_entries', sa.Column('duration',   sa.Float(),                 nullable=True))
 
-    # Step 2: Fill existing rows with placeholder values
-    op.execute("""
-        UPDATE time_entries
-        SET
-            start_time = datetime(date, '09:00:00'),
-            end_time   = datetime(date, '09:00:00', '+' || CAST(CAST(hours AS INTEGER) AS TEXT) || ' hours'),
-            duration   = hours
-        WHERE start_time IS NULL
-    """)
+    # Step 2: Fill existing rows — different SQL for SQLite vs PostgreSQL
+    bind = op.get_bind()
+    dialect = bind.dialect.name   # "sqlite" or "postgresql"
+
+    if dialect == "sqlite":
+        op.execute("""
+            UPDATE time_entries
+            SET
+                start_time = datetime(date, '09:00:00'),
+                end_time   = datetime(date, '09:00:00', '+' || CAST(CAST(hours AS INTEGER) AS TEXT) || ' hours'),
+                duration   = hours
+            WHERE start_time IS NULL
+        """)
+    else:
+        # PostgreSQL syntax
+        op.execute("""
+            UPDATE time_entries
+            SET
+                start_time = (date || ' 09:00:00')::timestamp,
+                end_time   = (date || ' 09:00:00')::timestamp + (hours * interval '1 hour'),
+                duration   = hours
+            WHERE start_time IS NULL
+        """)
 
     # Step 3: Drop old columns
     op.drop_column('time_entries', 'hours')
