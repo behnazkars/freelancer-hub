@@ -47,12 +47,18 @@ def create_invoice(client, auth_headers, client_id, amount, status="draft",
 
 
 def create_time_entry(client, auth_headers, project_id, hours):
-    """Create a time entry and return the full response dict."""
+    """Create a time entry and return the full response dict.
+    Accepts hours as a parameter to keep existing test calls unchanged.
+    Converts hours to start_time/end_time automatically.
+    """
+    from datetime import datetime, timedelta
+    start = datetime(2026, 6, 1, 9, 0, 0)
+    end   = start + timedelta(hours=hours)
     response = client.post("/time-entries/", json={
         "project_id": project_id,
-        "hours": hours,
+        "start_time": start.isoformat(),
+        "end_time":   end.isoformat(),
         "description": "Test work",
-        "date": str(date.today())
     }, headers=auth_headers)
     return response.json()
 
