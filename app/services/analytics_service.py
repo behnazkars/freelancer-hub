@@ -44,7 +44,7 @@ def get_dashboard_analytics(db: Session, user_id: int) -> dict:
 
     # ── Total hours logged ────────────────────────────────────────
     total_hours = db.query(
-        func.sum(TimeEntry.hours)
+        func.sum(TimeEntry.duration)
     ).filter(
         TimeEntry.user_id == user_id
     ).scalar() or 0.0
@@ -73,7 +73,7 @@ def get_dashboard_analytics(db: Session, user_id: int) -> dict:
     # ── Hours by project (top 5) ──────────────────────────────────
     hours_by_project = db.query(
         Project.name,
-        func.sum(TimeEntry.hours).label("total")
+        func.sum(TimeEntry.duration).label("total")
     ).join(
         TimeEntry, TimeEntry.project_id == Project.id
     ).filter(
@@ -81,7 +81,7 @@ def get_dashboard_analytics(db: Session, user_id: int) -> dict:
     ).group_by(
         Project.name
     ).order_by(
-        func.sum(TimeEntry.hours).desc()
+        func.sum(TimeEntry.duration).desc()
     ).limit(5).all()
 
     # ── Recent invoices (last 5) ──────────────────────────────────
