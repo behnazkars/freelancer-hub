@@ -9,6 +9,8 @@ from app.config import settings
 from app.database import engine, Base
 from app.routers import auth,  clients, projects, time_entries, invoices, analytics, pages
 
+from alembic.config import Config
+from alembic import command
 
 
 # Import models so Base knows about them before create_all
@@ -36,9 +38,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Create all database tables on startup
-# If the table already exists, it does nothing (safe to run repeatedly)
-Base.metadata.create_all(bind=engine)
+# Run database migrations on startup
+# This replaces Base.metadata.create_all() — Alembic handles everything now
+# alembic upgrade head is idempotent — safe to run on every startup
+def run_migrations():
+    alembic_cfg = Config("alembic.ini")
+    command.upgrade(alembic_cfg, "head")
+
+run_migrations()
 
 # Mount the static files directory
 # Any file in /static/ is now served at /static/filename
