@@ -7,6 +7,12 @@ from app.models.project import Project
 from app.schemas.time_entry import TimeEntryCreate, TimeEntryUpdate
 
 
+def _calculate_duration(start_time, end_time) -> float:
+    """Calculate duration in hours, rounded to 2 decimal places."""
+    delta = end_time - start_time
+    return round(delta.total_seconds() / 3600, 2)
+
+
 def get_all_time_entries(db: Session, user_id: int) -> list[TimeEntry]:
     """Get all time entries for the logged-in user."""
     return db.query(TimeEntry).filter(TimeEntry.user_id == user_id).all()
@@ -17,10 +23,7 @@ def get_time_entries_by_project(
     project_id: int,
     user_id: int
 ) -> list[TimeEntry]:
-    """
-    Get all time entries for a specific project.
-    Useful for showing a project's full time log.
-    """
+    """Get all time entries for a specific project."""
     return db.query(TimeEntry).filter(
         TimeEntry.project_id == project_id,
         TimeEntry.user_id == user_id
@@ -52,9 +55,8 @@ def create_time_entry(
     user_id: int
 ) -> TimeEntry:
     """
-    Log a new time entry.
-    Verifies the project exists and belongs to this user
-    before creating the entry.
+    Create a new time entry.
+    Duration is calculated automatically from start_time and end_time.
     """
     # Security check — project must belong to this user
     project = db.query(Project).filter(
@@ -68,9 +70,12 @@ def create_time_entry(
             detail="Project not found or does not belong to you"
         )
 
+    duration = _calculate_duration(entry_data.start_time, entry_data.end_time)
+
     new_entry = TimeEntry(
         **entry_data.model_dump(),
-        user_id=user_id
+        user_id=user_id,
+        duration=duration        # injected — not from user input
     )
     db.add(new_entry)
     db.commit()
@@ -79,22 +84,25 @@ def create_time_entry(
 
 
 def update_time_entry(
-    db: Session, entry_id: int, entry_data: TimeEntryUpdate, user_id: int
+    db: Session,
+    entry_id: int,
+    entry_data: TimeEntryUpdate,
+    user_id: int
 ) -> TimeEntry:
-    """Update a time entry."""
+    """
+    Update a time entry.
+    If start_time or end_time changes, duration is recalculated automatically.
+    """
     entry = get_time_entry_by_id(db, entry_id, user_id)
 
     update_data = entry_data.model_dump(exclude_unset=True)
 
-    # Convert date string to Python date object if present
-    # We accept date as string in the schema to avoid Pydantic v2
-    # Optional[date] coercion bug, so we convert manually here
-    if "date" in update_data and isinstance(update_data["date"], str):
-        from datetime import date as date_type
-        update_data["date"] = date_type.fromisoformat(update_data["date"])
-
     for field, value in update_data.items():
         setattr(entry, field, value)
+
+    # Recalculate duration if either time changed
+    if "start_time" in update_data or "end_time" in update_data:
+        entry.duration = _calculate_duration(entry.start_time, entry.end_time)
 
     db.commit()
     db.refresh(entry)
