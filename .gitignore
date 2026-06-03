@@ -27,3 +27,7 @@ Thumbs.db
 # VS Code — ignore personal settings but keep workspace config
 .vscode/*
 !.vscode/settings.json
+
+.coverage
+htmlcov/
+.pytest_cache/
