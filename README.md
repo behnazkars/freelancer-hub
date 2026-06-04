@@ -76,6 +76,12 @@ Visit `http://127.0.0.1:8000`
 - **Environment-based config** — Pydantic Settings reads from .env locally and env vars in production
 
 
+## Decision log
+
+See [DECISIONS.md](DECISIONS.md) for architectural decisions and their rationale.
+
+
+
 ## Running Tests
 pip install pytest pytest-asyncio httpx pytest-cov
 pytest                          # run all tests
