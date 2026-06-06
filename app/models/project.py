@@ -16,6 +16,10 @@ class ProjectStatus(str, enum.Enum):
     on_hold = "on_hold"
     cancelled = "cancelled"
 
+class PricingType(str, enum.Enum):
+    hourly = "hourly"
+    fixed = "fixed"
+
 
 class Project(Base):
     __tablename__ = "projects"
@@ -39,6 +43,13 @@ class Project(Base):
 
     # budget_hours is the agreed time budget for scope creep detection
     budget_hours: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
+    # pricing_type determines how budget and hours relate
+    # hourly: rate × hours = invoice total
+    # fixed: budget is the contract amount, budget_hours is your internal profitability estimate
+    pricing_type: Mapped[PricingType] = mapped_column(
+        Enum(PricingType), default=PricingType.hourly
+    )
 
     status: Mapped[ProjectStatus] = mapped_column(
         Enum(ProjectStatus), default=ProjectStatus.active

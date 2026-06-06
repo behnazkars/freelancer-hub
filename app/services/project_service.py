@@ -80,7 +80,6 @@ def get_scope_status(db: Session, project_id: int, user_id: int) -> dict:
     """
     project = get_project_by_id(db, project_id, user_id)
 
-    # Graceful no-op: no budget set means no alert to show
     if not project.budget_hours:
         return {
             "project_id": project_id,
@@ -94,7 +93,6 @@ def get_scope_status(db: Session, project_id: int, user_id: int) -> dict:
             "profit_margin": None,
         }
 
-    # Sum all duration values for this project — server-side only
     total_logged = db.query(func.sum(TimeEntry.duration)).filter(
         TimeEntry.project_id == project_id,
         TimeEntry.user_id == user_id
@@ -102,18 +100,27 @@ def get_scope_status(db: Session, project_id: int, user_id: int) -> dict:
 
     budget_used_percent = round((total_logged / project.budget_hours) * 100, 2)
 
-    # Profitability — server-side only, never from client input
-    projected_revenue = project.budget_hours * project.hourly_rate
-    actual_cost = total_logged * project.hourly_rate
+    # Profitability calculation differs by pricing type:
+    # - hourly: revenue = hours × rate (open-ended, billed by time)
+    # - fixed: revenue = the agreed budget amount (rate is irrelevant)
+    if project.pricing_type.value == "fixed":
+        projected_revenue = project.budget if project.budget else None
+        if projected_revenue and project.budget_hours > 0:
+            implied_rate = projected_revenue / project.budget_hours
+            actual_cost = total_logged * implied_rate
+        else:
+            actual_cost = None
+    else:
+        projected_revenue = project.budget_hours * project.hourly_rate
+        actual_cost = total_logged * project.hourly_rate
 
-    if projected_revenue > 0:
+    if projected_revenue and projected_revenue > 0 and actual_cost is not None:
         profit_margin = round(
             ((projected_revenue - actual_cost) / projected_revenue) * 100, 2
         )
     else:
         profit_margin = None
 
-    # Determine alert level
     if budget_used_percent >= 100:
         alert_level = "danger"
         message = f"Budget exceeded! You have used {budget_used_percent}% of your budget hours."

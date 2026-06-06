@@ -52,32 +52,64 @@
                       style="resize:vertical;"
                       placeholder="Brief project description"></textarea>
         </div>
+        <div class="form-group">
+            <label class="form-label">Pricing type</label>
+            <div style="display:flex; gap:0; border:1px solid var(--border);
+                        border-radius:var(--radius-md); overflow:hidden;">
+                <button type="button" id="tab-hourly"
+                    onclick="setPricingType('hourly')"
+                    style="flex:1; padding:7px 10px; font-size:13px;
+                           border:none; cursor:pointer;
+                           background:var(--primary); color:#fff; font-weight:500;">
+                    Hourly
+                </button>
+                <button type="button" id="tab-fixed"
+                    onclick="setPricingType('fixed')"
+                    style="flex:1; padding:7px 10px; font-size:13px;
+                           border:none; cursor:pointer;
+                           background:var(--surface-alt, #f5f5f5);
+                           color:var(--text-hint);">
+                    Fixed price
+                </button>
+            </div>
+            <input type="hidden" id="f-pricing-type" value="hourly">
+        </div>
+
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-            <div class="form-group">
+            <div class="form-group" id="rate-field">
                 <label class="form-label">Hourly rate ($)</label>
                 <input type="number" id="f-rate" class="form-input"
                        placeholder="0.00" min="0" step="0.01"
                        oninput="calcBudgetHours()">
             </div>
             <div class="form-group">
-                <label class="form-label">Budget ($)</label>
+                <label class="form-label" id="budget-label">Budget ($)</label>
                 <input type="number" id="f-budget" class="form-input"
-                       placeholder="Optional" min="0" step="0.01"
+                       placeholder="Auto-calculated" min="0" step="0.01"
                        oninput="calcBudgetHours()">
             </div>
         </div>
-        <div class="form-group">
+        <div class="form-group" id="budget-hours-group">
             <label class="form-label">
                 Budget hours
-                <span style="font-size:11px; color:var(--text-hint);
-                             font-weight:400;">
-                    (auto-calculated, or override manually)
-                </span>
+                <span style="font-size:11px; color:var(--text-hint); font-weight:400;"
+                      id="budget-hours-hint">(your time estimate)</span>
             </label>
             <input type="number" id="f-budget-hours" class="form-input"
-                   placeholder="Auto-calculated" min="0" step="0.5"
-                   readonly style="background:var(--surface-alt, #f5f5f5); cursor:not-allowed;">
+                   placeholder="e.g. 50" min="0" step="0.5"
+                   oninput="calcBudgetHours()">
         </div>
+        <div id="hourly-computed-display" style="display:none;
+             background:#EAF3DE33; border:1px solid #97C459;
+             border-radius:var(--radius-md); padding:8px 12px;
+             font-size:13px; color:#3B6D11; margin-bottom:0.75rem;">
+        </div>
+        <div id="implied-rate-display" style="display:none;
+             background:#EEEDFE33; border:1px solid #AFA9EC;
+             border-radius:var(--radius-md); padding:8px 12px;
+             font-size:13px; color:#534AB7; margin-bottom:0.75rem;">
+        </div>
+        
         <div class="form-group">
             <label class="form-label">Status</label>
             <select id="f-status" class="form-input">
@@ -165,8 +197,9 @@ function renderProjects(projects) {
                                     margin-bottom:0.75rem;">${p.description}</div>` : ''}
                     <div style="display:flex; gap:16px; font-size:12px;
                                 color:var(--text-hint); margin-bottom:1rem;">
-                        <span>💰 $${p.hourly_rate}/hr</span>
-                        ${p.budget ? `<span>🎯 Budget: $${p.budget}</span>` : ''}
+                        ${p.pricing_type === 'fixed'
+                            ? `<span>🎯 Fixed: $${p.budget || '—'}</span>`
+                            : `<span>💰 $${p.hourly_rate}/hr</span>`}
                     </div>
                     <div style="display:flex; gap:8px;">
                         <button class="btn"
@@ -192,19 +225,94 @@ function renderProjects(projects) {
 
 
 // ── Budget hours auto-calculation ─────────────────────────────────
-function calcBudgetHours() {
-    const rate   = parseFloat(document.getElementById('f-rate').value);
-    const budget = parseFloat(document.getElementById('f-budget').value);
-    const field  = document.getElementById('f-budget-hours');
+function setPricingType(type) {
+    document.getElementById('f-pricing-type').value = type;
 
-    if (rate > 0 && budget > 0) {
-        field.value = Math.round((budget / rate) * 100) / 100;
+    const hourlyTab   = document.getElementById('tab-hourly');
+    const fixedTab    = document.getElementById('tab-fixed');
+    const rateField   = document.getElementById('rate-field');
+    const budgetLabel = document.getElementById('budget-label');
+    const budgetField = document.getElementById('f-budget');
+    const hint        = document.getElementById('budget-hours-hint');
+
+    if (type === 'hourly') {
+        hourlyTab.style.background  = 'var(--primary)';
+        hourlyTab.style.color       = '#fff';
+        hourlyTab.style.fontWeight  = '500';
+        fixedTab.style.background   = 'var(--surface-alt, #f5f5f5)';
+        fixedTab.style.color        = 'var(--text-hint)';
+        fixedTab.style.fontWeight   = 'normal';
+        rateField.style.display     = 'block';
+        budgetLabel.textContent     = 'Budget ($)';
+        hint.textContent            = '(your time estimate)';
+        // budget is read-only in hourly mode — it's calculated
+        budgetField.setAttribute('readonly', true);
+        budgetField.style.background = 'var(--surface-alt, #f5f5f5)';
+        budgetField.style.cursor     = 'not-allowed';
+        document.getElementById('implied-rate-display').style.display = 'none';
     } else {
-        field.value = '';
+        fixedTab.style.background   = 'var(--primary)';
+        fixedTab.style.color        = '#fff';
+        fixedTab.style.fontWeight   = '500';
+        hourlyTab.style.background  = 'var(--surface-alt, #f5f5f5)';
+        hourlyTab.style.color       = 'var(--text-hint)';
+        hourlyTab.style.fontWeight  = 'normal';
+        rateField.style.display     = 'none';
+        budgetLabel.textContent     = 'Fixed budget ($) *';
+        hint.textContent            = '(your internal estimate — how many hours can you afford?)';
+        // budget is editable in fixed mode — it's the contract amount
+        budgetField.removeAttribute('readonly');
+        budgetField.style.background = '';
+        budgetField.style.cursor     = '';
+        document.getElementById('hourly-computed-display').style.display = 'none';
+    }
+    calcBudgetHours();
+}
+
+function calcBudgetHours() {
+    const type       = document.getElementById('f-pricing-type').value;
+    const rate       = parseFloat(document.getElementById('f-rate').value);
+    const hoursField = document.getElementById('f-budget-hours');
+    const budgetField = document.getElementById('f-budget');
+    const impliedEl  = document.getElementById('implied-rate-display');
+    const hourlyEl   = document.getElementById('hourly-computed-display');
+
+    if (type === 'hourly') {
+        impliedEl.style.display = 'none';
+        const hours = parseFloat(hoursField.value);
+
+        if (rate > 0 && hours > 0) {
+            // rate × hours → auto-calculate budget
+            const computedBudget = Math.round(rate * hours * 100) / 100;
+            budgetField.value = computedBudget;
+            budgetField.setAttribute('readonly', true);
+            budgetField.style.background = 'var(--surface-alt, #f5f5f5)';
+            budgetField.style.cursor = 'not-allowed';
+            hourlyEl.style.display = 'block';
+            hourlyEl.textContent = `💰 $${rate}/hr × ${hours} hrs = $${computedBudget}`;
+        } else {
+            budgetField.value = '';
+            budgetField.setAttribute('readonly', true);
+            budgetField.style.background = 'var(--surface-alt, #f5f5f5)';
+            budgetField.style.cursor = 'not-allowed';
+            hourlyEl.style.display = 'none';
+        }
+
+    } else {
+        // Fixed price: budget is manual, hours is manual, show implied rate live
+        hourlyEl.style.display = 'none';
+        const budget = parseFloat(budgetField.value);
+        const hours  = parseFloat(hoursField.value);
+        if (budget > 0 && hours > 0) {
+            const implied = Math.round((budget / hours) * 100) / 100;
+            impliedEl.style.display = 'block';
+            impliedEl.textContent = `💡 Implied rate: $${implied}/hr`;
+        } else {
+            impliedEl.style.display = 'none';
+        }
     }
 }
 
-// ── Modal helpers ──────────────────────────────────────────────────
 function openAddModal() {
     editingId = null;
     document.getElementById('modal-title').textContent = 'New project';
@@ -219,9 +327,10 @@ function openEditModal(project) {
     document.getElementById('f-client').value      = project.client_id   || '';
     document.getElementById('f-description').value = project.description || '';
     document.getElementById('f-rate').value        = project.hourly_rate || '';
-    document.getElementById('f-budget').value        = project.budget       || '';
-    document.getElementById('f-budget-hours').value  = project.budget_hours || '';
-    document.getElementById('f-status').value        = project.status       || 'active';
+    document.getElementById('f-budget').value      = project.budget      || '';
+    document.getElementById('f-budget-hours').value = project.budget_hours || '';
+    document.getElementById('f-status').value      = project.status      || 'active';
+    setPricingType(project.pricing_type || 'hourly');
     showModal();
 }
 
@@ -241,6 +350,9 @@ function clearForm() {
     });
     document.getElementById('f-client').value = '';
     document.getElementById('f-status').value = 'active';
+    document.getElementById('hourly-computed-display').style.display = 'none';
+    document.getElementById('implied-rate-display').style.display = 'none';
+    setPricingType('hourly');
 }
 
 // ── Save ───────────────────────────────────────────────────────────
@@ -262,6 +374,7 @@ async function saveProject() {
         hourly_rate:  parseFloat(document.getElementById('f-rate').value)   || 0,
         budget:       parseFloat(document.getElementById('f-budget').value) || null,
         budget_hours: parseFloat(document.getElementById('f-budget-hours').value) || null,
+        pricing_type: document.getElementById('f-pricing-type').value,
         status:       document.getElementById('f-status').value,
     };
 

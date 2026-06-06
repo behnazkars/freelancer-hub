@@ -2,7 +2,7 @@
 from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional
-from app.models.project import ProjectStatus
+from app.models.project import ProjectStatus, PricingType
 
 
 class ProjectCreate(BaseModel):
@@ -12,6 +12,7 @@ class ProjectCreate(BaseModel):
     hourly_rate: Optional[float] = 0.0
     budget: Optional[float] = None
     budget_hours: Optional[float] = None
+    pricing_type: Optional[PricingType] = PricingType.hourly
     status: Optional[ProjectStatus] = ProjectStatus.active
 
 
@@ -21,6 +22,7 @@ class ProjectUpdate(BaseModel):
     hourly_rate: Optional[float] = None
     budget: Optional[float] = None
     budget_hours: Optional[float] = None
+    pricing_type: Optional[PricingType] = None
     status: Optional[ProjectStatus] = None
 
 
@@ -33,6 +35,7 @@ class ProjectResponse(BaseModel):
     hourly_rate: float
     budget: Optional[float] = None
     budget_hours: Optional[float] = None
+    pricing_type: PricingType
     status: ProjectStatus
     created_at: datetime
 
