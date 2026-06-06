@@ -214,3 +214,232 @@ def test_user_cannot_delete_other_users_project(client, auth_headers):
     # Verify it still exists for User A
     response = client.get(f"/projects/{project_id}", headers=auth_headers)
     assert response.status_code == 200
+
+
+# ─── Scope Creep Detector ─────────────────────────────────────────────────────
+
+from datetime import datetime, timedelta
+
+
+def make_times(start_hour=9, duration_hours=2.0):
+    """Generate fixed ISO start/end times. Never use date.today() in tests."""
+    base = datetime(2026, 6, 1, start_hour, 0, 0)
+    end  = base + timedelta(hours=duration_hours)
+    return base.isoformat(), end.isoformat()
+
+
+def log_hours(client, auth_headers, project_id,
+              duration_hours=2.0, start_hour=9):
+    """Create a time entry for a project and return the response."""
+    start_time, end_time = make_times(start_hour=start_hour,
+                                      duration_hours=duration_hours)
+    return client.post("/time-entries/", json={
+        "project_id":  project_id,
+        "start_time":  start_time,
+        "end_time":    end_time,
+        "description": "Test work"
+    }, headers=auth_headers)
+
+
+def test_scope_status_no_budget_hours_set(client, auth_headers):
+    """A project with no budget_hours returns alert_level 'none' — graceful no-op."""
+    client_id  = create_client(client, auth_headers)
+    project_id = create_project(
+        client, auth_headers, client_id,
+        hourly_rate=100.0
+        # budget_hours intentionally omitted
+    ).json()["id"]
+
+    response = client.get(
+        f"/projects/{project_id}/scope-status",
+        headers=auth_headers
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["alert_level"]        == "none"
+    assert data["budget_hours"]       is None
+    assert data["logged_hours"]       is None
+    assert data["budget_used_percent"] is None
+
+
+def test_scope_status_zero_budget_hours(client, auth_headers):
+    """A project with budget_hours=0 returns alert_level 'none' — division by zero guard."""
+    client_id  = create_client(client, auth_headers)
+    project_id = create_project(
+        client, auth_headers, client_id,
+        hourly_rate=100.0,
+        budget_hours=0.0
+    ).json()["id"]
+
+    response = client.get(
+        f"/projects/{project_id}/scope-status",
+        headers=auth_headers
+    )
+    assert response.status_code == 200
+    assert response.json()["alert_level"] == "none"
+
+
+def test_scope_status_well_under_budget(client, auth_headers):
+    """Logging 2h against a 10h budget (20%) returns alert_level 'none'."""
+    client_id  = create_client(client, auth_headers)
+    project_id = create_project(
+        client, auth_headers, client_id,
+        hourly_rate=100.0,
+        budget_hours=10.0
+    ).json()["id"]
+
+    log_hours(client, auth_headers, project_id, duration_hours=2.0)
+
+    response = client.get(
+        f"/projects/{project_id}/scope-status",
+        headers=auth_headers
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["alert_level"]         == "none"
+    assert data["logged_hours"]        == 2.0
+    assert data["budget_used_percent"] == 20.0
+
+
+def test_scope_status_warning_threshold(client, auth_headers):
+    """Logging 8h against a 10h budget (80%) returns alert_level 'warning'."""
+    client_id  = create_client(client, auth_headers)
+    project_id = create_project(
+        client, auth_headers, client_id,
+        hourly_rate=100.0,
+        budget_hours=10.0
+    ).json()["id"]
+
+    # Log 8 hours in two entries to test accumulation
+    log_hours(client, auth_headers, project_id,
+              duration_hours=4.0, start_hour=9)
+    log_hours(client, auth_headers, project_id,
+              duration_hours=4.0, start_hour=14)
+
+    response = client.get(
+        f"/projects/{project_id}/scope-status",
+        headers=auth_headers
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["alert_level"]         == "warning"
+    assert data["logged_hours"]        == 8.0
+    assert data["budget_used_percent"] == 80.0
+
+
+def test_scope_status_danger_threshold(client, auth_headers):
+    """Logging 10h against a 10h budget (100%) returns alert_level 'danger'."""
+    client_id  = create_client(client, auth_headers)
+    project_id = create_project(
+        client, auth_headers, client_id,
+        hourly_rate=100.0,
+        budget_hours=10.0
+    ).json()["id"]
+
+    log_hours(client, auth_headers, project_id, duration_hours=10.0)
+
+    response = client.get(
+        f"/projects/{project_id}/scope-status",
+        headers=auth_headers
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["alert_level"]         == "danger"
+    assert data["logged_hours"]        == 10.0
+    assert data["budget_used_percent"] == 100.0
+
+
+def test_scope_status_exceeded_budget(client, auth_headers):
+    """Logging 12h against a 10h budget (120%) returns alert_level 'danger'."""
+    client_id  = create_client(client, auth_headers)
+    project_id = create_project(
+        client, auth_headers, client_id,
+        hourly_rate=100.0,
+        budget_hours=10.0
+    ).json()["id"]
+
+    log_hours(client, auth_headers, project_id, duration_hours=12.0)
+
+    response = client.get(
+        f"/projects/{project_id}/scope-status",
+        headers=auth_headers
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["alert_level"]         == "danger"
+    assert data["budget_used_percent"] == 120.0
+
+
+def test_scope_status_profitability_calculations(client, auth_headers):
+    """Profit margin is calculated server-side from budget_hours and hourly_rate."""
+    client_id  = create_client(client, auth_headers)
+    project_id = create_project(
+        client, auth_headers, client_id,
+        hourly_rate=100.0,
+        budget_hours=10.0   # projected_revenue = 10 * 100 = $1000
+    ).json()["id"]
+
+    log_hours(client, auth_headers, project_id,
+              duration_hours=5.0)   # actual_cost = 5 * 100 = $500
+
+    response = client.get(
+        f"/projects/{project_id}/scope-status",
+        headers=auth_headers
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["projected_revenue"] == 1000.0
+    assert data["actual_cost"]       == 500.0
+    assert data["profit_margin"]     == 50.0   # (1000-500)/1000 * 100
+
+
+def test_scope_status_no_time_logged(client, auth_headers):
+    """A project with budget_hours but no time entries shows 0% used, no alert."""
+    client_id  = create_client(client, auth_headers)
+    project_id = create_project(
+        client, auth_headers, client_id,
+        hourly_rate=100.0,
+        budget_hours=10.0
+    ).json()["id"]
+
+    # No time entries logged
+
+    response = client.get(
+        f"/projects/{project_id}/scope-status",
+        headers=auth_headers
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["alert_level"]         == "none"
+    assert data["logged_hours"]        == 0.0
+    assert data["budget_used_percent"] == 0.0
+
+
+def test_scope_status_requires_auth(client, auth_headers):
+    """Fetching scope status without a token is rejected."""
+    client_id  = create_client(client, auth_headers)
+    project_id = create_project(
+        client, auth_headers, client_id,
+        budget_hours=10.0
+    ).json()["id"]
+
+    response = client.get(f"/projects/{project_id}/scope-status")
+    assert response.status_code == 401
+
+
+def test_scope_status_ownership_security(client, auth_headers):
+    """User B cannot fetch scope status for User A's project."""
+    client_id  = create_client(client, auth_headers)
+    project_id = create_project(
+        client, auth_headers, client_id,
+        budget_hours=10.0
+    ).json()["id"]
+
+    user_b_headers = register_and_login(
+        client, "Bob", "bob@example.com", "BobPass123"
+    )
+    response = client.get(
+        f"/projects/{project_id}/scope-status",
+        headers=user_b_headers
+    )
+    assert response.status_code == 404

@@ -56,13 +56,27 @@
             <div class="form-group">
                 <label class="form-label">Hourly rate ($)</label>
                 <input type="number" id="f-rate" class="form-input"
-                       placeholder="0.00" min="0" step="0.01">
+                       placeholder="0.00" min="0" step="0.01"
+                       oninput="calcBudgetHours()">
             </div>
             <div class="form-group">
                 <label class="form-label">Budget ($)</label>
                 <input type="number" id="f-budget" class="form-input"
-                       placeholder="Optional" min="0" step="0.01">
+                       placeholder="Optional" min="0" step="0.01"
+                       oninput="calcBudgetHours()">
             </div>
+        </div>
+        <div class="form-group">
+            <label class="form-label">
+                Budget hours
+                <span style="font-size:11px; color:var(--text-hint);
+                             font-weight:400;">
+                    (auto-calculated, or override manually)
+                </span>
+            </label>
+            <input type="number" id="f-budget-hours" class="form-input"
+                   placeholder="Auto-calculated" min="0" step="0.5"
+                   readonly style="background:var(--surface-alt, #f5f5f5); cursor:not-allowed;">
         </div>
         <div class="form-group">
             <label class="form-label">Status</label>
@@ -134,7 +148,7 @@ function renderProjects(projects) {
             ${projects.map(p => {
                 const client = allClients.find(c => c.id === p.client_id);
                 return `
-                <div class="card">
+                <div class="card" data-project-id="${p.id}">
                     <div style="display:flex; justify-content:space-between;
                                 align-items:flex-start; margin-bottom:0.75rem;">
                         <div>
@@ -172,6 +186,22 @@ function renderProjects(projects) {
                 </div>`;
             }).join('')}
         </div>`;
+    // Load scope creep banners after cards are in the DOM
+    loadScopeBanners(projects);
+}
+
+
+// ── Budget hours auto-calculation ─────────────────────────────────
+function calcBudgetHours() {
+    const rate   = parseFloat(document.getElementById('f-rate').value);
+    const budget = parseFloat(document.getElementById('f-budget').value);
+    const field  = document.getElementById('f-budget-hours');
+
+    if (rate > 0 && budget > 0) {
+        field.value = Math.round((budget / rate) * 100) / 100;
+    } else {
+        field.value = '';
+    }
 }
 
 // ── Modal helpers ──────────────────────────────────────────────────
@@ -189,8 +219,9 @@ function openEditModal(project) {
     document.getElementById('f-client').value      = project.client_id   || '';
     document.getElementById('f-description').value = project.description || '';
     document.getElementById('f-rate').value        = project.hourly_rate || '';
-    document.getElementById('f-budget').value      = project.budget      || '';
-    document.getElementById('f-status').value      = project.status      || 'active';
+    document.getElementById('f-budget').value        = project.budget       || '';
+    document.getElementById('f-budget-hours').value  = project.budget_hours || '';
+    document.getElementById('f-status').value        = project.status       || 'active';
     showModal();
 }
 
@@ -205,7 +236,7 @@ function closeModal() {
 }
 
 function clearForm() {
-    ['f-name','f-description','f-rate','f-budget'].forEach(id => {
+    ['f-name','f-description','f-rate','f-budget','f-budget-hours'].forEach(id => {
         document.getElementById(id).value = '';
     });
     document.getElementById('f-client').value = '';
@@ -226,11 +257,12 @@ async function saveProject() {
 
     const payload = {
         name,
-        client_id:   parseInt(client_id),
-        description: document.getElementById('f-description').value.trim() || null,
-        hourly_rate: parseFloat(document.getElementById('f-rate').value)   || 0,
-        budget:      parseFloat(document.getElementById('f-budget').value) || null,
-        status:      document.getElementById('f-status').value,
+        client_id:    parseInt(client_id),
+        description:  document.getElementById('f-description').value.trim() || null,
+        hourly_rate:  parseFloat(document.getElementById('f-rate').value)   || 0,
+        budget:       parseFloat(document.getElementById('f-budget').value) || null,
+        budget_hours: parseFloat(document.getElementById('f-budget-hours').value) || null,
+        status:       document.getElementById('f-status').value,
     };
 
     const url    = editingId ? `/projects/${editingId}` : '/projects/';
@@ -264,6 +296,44 @@ async function deleteProject(id, name) {
         headers: { 'Authorization': 'Bearer ' + token }
     });
     loadProjects();
+}
+
+// ── Scope creep banners ────────────────────────────────────────────
+async function fetchScopeStatus(projectId) {
+    try {
+        const res = await fetch(`/projects/${projectId}/scope-status`, {
+            headers: { 'Authorization': 'Bearer ' + token }
+        });
+        if (!res.ok) return null;
+        return await res.json();
+    } catch (e) {
+        return null;
+    }
+}
+
+async function loadScopeBanners(projects) {
+    for (const p of projects) {
+        const status = await fetchScopeStatus(p.id);
+        if (!status || status.alert_level === 'none') continue;
+
+        const card = document.querySelector(`[data-project-id="${p.id}"]`);
+        if (!card) continue;
+
+        const isWarning = status.alert_level === 'warning';
+        const banner = document.createElement('div');
+        banner.style.cssText = `
+            margin-top: 0.75rem;
+            padding: 0.5rem 0.75rem;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            background: ${isWarning ? '#fffbe6' : '#fff1f0'};
+            color: ${isWarning ? '#b45309' : '#cf1322'};
+            border: 1px solid ${isWarning ? '#fde68a' : '#ffa39e'};
+        `;
+        banner.textContent = (isWarning ? '⚠️ ' : '🚨 ') + status.message;
+        card.appendChild(banner);
+    }
 }
 
 document.getElementById('modal-overlay').addEventListener('click', function(e) {

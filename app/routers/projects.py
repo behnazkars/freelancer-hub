@@ -11,7 +11,8 @@ from app.services.project_service import (
     get_project_by_id,
     create_project,
     update_project,
-    delete_project
+    delete_project,
+    get_scope_status
 )
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
@@ -60,3 +61,12 @@ def delete_existing_project(
     current_user: User = Depends(get_current_user)
 ):
     return delete_project(db, project_id, current_user.id)
+
+
+@router.get("/{project_id}/scope-status")
+def get_project_scope_status(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    return get_scope_status(db, project_id, current_user.id)

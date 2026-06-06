@@ -11,6 +11,7 @@ class ProjectCreate(BaseModel):
     client_id: int
     hourly_rate: Optional[float] = 0.0
     budget: Optional[float] = None
+    budget_hours: Optional[float] = None
     status: Optional[ProjectStatus] = ProjectStatus.active
 
 
@@ -19,6 +20,7 @@ class ProjectUpdate(BaseModel):
     description: Optional[str] = None
     hourly_rate: Optional[float] = None
     budget: Optional[float] = None
+    budget_hours: Optional[float] = None
     status: Optional[ProjectStatus] = None
 
 
@@ -30,6 +32,7 @@ class ProjectResponse(BaseModel):
     description: Optional[str] = None
     hourly_rate: float
     budget: Optional[float] = None
+    budget_hours: Optional[float] = None
     status: ProjectStatus
     created_at: datetime
 

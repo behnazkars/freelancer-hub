@@ -37,6 +37,9 @@ class Project(Base):
     # budget is the total agreed amount (optional)
     budget: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
+    # budget_hours is the agreed time budget for scope creep detection
+    budget_hours: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
     status: Mapped[ProjectStatus] = mapped_column(
         Enum(ProjectStatus), default=ProjectStatus.active
     )
