@@ -75,6 +75,8 @@
             <input type="hidden" id="f-pricing-type" value="hourly">
         </div>
 
+        <!-- Row 1: two inputs side by side (rate + budget hours) -->
+        <!-- Row 1: two inputs side by side — content changes per pricing type -->
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
             <div class="form-group" id="rate-field">
                 <label class="form-label">Hourly rate ($)</label>
@@ -82,23 +84,25 @@
                        placeholder="0.00" min="0" step="0.01"
                        oninput="calcBudgetHours()">
             </div>
-            <div class="form-group">
-                <label class="form-label" id="budget-label">Budget ($)</label>
+            <div class="form-group" id="budget-field" style="display:none;">
+                <label class="form-label">Fixed budget ($) *</label>
                 <input type="number" id="f-budget" class="form-input"
-                       placeholder="Auto-calculated" min="0" step="0.01"
+                       placeholder="e.g. 4200" min="0" step="0.01"
+                       oninput="calcBudgetHours()">
+            </div>
+            <div class="form-group">
+                <label class="form-label">
+                    Estimated hours
+                    <span style="font-size:11px; color:var(--text-hint); font-weight:400;"
+                          id="budget-hours-hint"> (your time estimate)</span>
+                </label>
+                <input type="number" id="f-budget-hours" class="form-input"
+                       placeholder="e.g. 50" min="0" step="0.5"
                        oninput="calcBudgetHours()">
             </div>
         </div>
-        <div class="form-group" id="budget-hours-group">
-            <label class="form-label">
-                Budget hours
-                <span style="font-size:11px; color:var(--text-hint); font-weight:400;"
-                      id="budget-hours-hint">(your time estimate)</span>
-            </label>
-            <input type="number" id="f-budget-hours" class="form-input"
-                   placeholder="e.g. 50" min="0" step="0.5"
-                   oninput="calcBudgetHours()">
-        </div>
+
+        <!-- Computed result row — shown below the inputs -->
         <div id="hourly-computed-display" style="display:none;
              background:#EAF3DE33; border:1px solid #97C459;
              border-radius:var(--radius-md); padding:8px 12px;
@@ -231,77 +235,69 @@ function setPricingType(type) {
     const hourlyTab   = document.getElementById('tab-hourly');
     const fixedTab    = document.getElementById('tab-fixed');
     const rateField   = document.getElementById('rate-field');
-    const budgetLabel = document.getElementById('budget-label');
-    const budgetField = document.getElementById('f-budget');
+    const budgetField = document.getElementById('budget-field');
     const hint        = document.getElementById('budget-hours-hint');
 
     if (type === 'hourly') {
-        hourlyTab.style.background  = 'var(--primary)';
-        hourlyTab.style.color       = '#fff';
-        hourlyTab.style.fontWeight  = '500';
-        fixedTab.style.background   = 'var(--surface-alt, #f5f5f5)';
-        fixedTab.style.color        = 'var(--text-hint)';
-        fixedTab.style.fontWeight   = 'normal';
-        rateField.style.display     = 'block';
-        budgetLabel.textContent     = 'Budget ($)';
-        hint.textContent            = '(your time estimate)';
-        // budget is read-only in hourly mode — it's calculated
-        budgetField.setAttribute('readonly', true);
-        budgetField.style.background = 'var(--surface-alt, #f5f5f5)';
-        budgetField.style.cursor     = 'not-allowed';
+        hourlyTab.style.background = 'var(--primary)';
+        hourlyTab.style.color      = '#fff';
+        hourlyTab.style.fontWeight = '500';
+        fixedTab.style.background  = 'var(--surface-alt, #f5f5f5)';
+        fixedTab.style.color       = 'var(--text-hint)';
+        fixedTab.style.fontWeight  = 'normal';
+        rateField.style.display    = 'block';
+        budgetField.style.display  = 'none';
+        hint.textContent           = ' (your time estimate)';
         document.getElementById('implied-rate-display').style.display = 'none';
     } else {
-        fixedTab.style.background   = 'var(--primary)';
-        fixedTab.style.color        = '#fff';
-        fixedTab.style.fontWeight   = '500';
-        hourlyTab.style.background  = 'var(--surface-alt, #f5f5f5)';
-        hourlyTab.style.color       = 'var(--text-hint)';
-        hourlyTab.style.fontWeight  = 'normal';
-        rateField.style.display     = 'none';
-        budgetLabel.textContent     = 'Fixed budget ($) *';
-        hint.textContent            = '(your internal estimate — how many hours can you afford?)';
-        // budget is editable in fixed mode — it's the contract amount
-        budgetField.removeAttribute('readonly');
-        budgetField.style.background = '';
-        budgetField.style.cursor     = '';
+        fixedTab.style.background  = 'var(--primary)';
+        fixedTab.style.color       = '#fff';
+        fixedTab.style.fontWeight  = '500';
+        hourlyTab.style.background = 'var(--surface-alt, #f5f5f5)';
+        hourlyTab.style.color      = 'var(--text-hint)';
+        hourlyTab.style.fontWeight = 'normal';
+        rateField.style.display    = 'none';
+        budgetField.style.display  = 'block';
+        hint.textContent           = ' (your time estimate)';
         document.getElementById('hourly-computed-display').style.display = 'none';
     }
     calcBudgetHours();
 }
 
 function calcBudgetHours() {
-    const type       = document.getElementById('f-pricing-type').value;
-    const rate       = parseFloat(document.getElementById('f-rate').value);
-    const hoursField = document.getElementById('f-budget-hours');
-    const budgetField = document.getElementById('f-budget');
-    const impliedEl  = document.getElementById('implied-rate-display');
-    const hourlyEl   = document.getElementById('hourly-computed-display');
+    const type        = document.getElementById('f-pricing-type').value;
+    const rate        = parseFloat(document.getElementById('f-rate').value);
+    const hoursField  = document.getElementById('f-budget-hours');
+    const budgetInput = document.getElementById('f-budget');
+    const impliedEl   = document.getElementById('implied-rate-display');
+    const hourlyEl    = document.getElementById('hourly-computed-display');
 
     if (type === 'hourly') {
         impliedEl.style.display = 'none';
-        const hours = parseFloat(hoursField.value);
+        // budget is always read-only in hourly mode — it's computed
+        budgetInput.setAttribute('readonly', true);
+        budgetInput.style.background = 'var(--surface-alt, #f5f5f5)';
+        budgetInput.style.cursor = 'not-allowed';
 
+        const hours = parseFloat(hoursField.value);
         if (rate > 0 && hours > 0) {
-            // rate × hours → auto-calculate budget
             const computedBudget = Math.round(rate * hours * 100) / 100;
-            budgetField.value = computedBudget;
-            budgetField.setAttribute('readonly', true);
-            budgetField.style.background = 'var(--surface-alt, #f5f5f5)';
-            budgetField.style.cursor = 'not-allowed';
+            budgetInput.value = computedBudget;
             hourlyEl.style.display = 'block';
-            hourlyEl.textContent = `💰 $${rate}/hr × ${hours} hrs = $${computedBudget}`;
+            hourlyEl.textContent = `💰 Project budget: $${computedBudget}`;
         } else {
-            budgetField.value = '';
-            budgetField.setAttribute('readonly', true);
-            budgetField.style.background = 'var(--surface-alt, #f5f5f5)';
-            budgetField.style.cursor = 'not-allowed';
+            budgetInput.value = '';
             hourlyEl.style.display = 'none';
         }
 
     } else {
-        // Fixed price: budget is manual, hours is manual, show implied rate live
+        // fixed mode — budget is always editable
         hourlyEl.style.display = 'none';
-        const budget = parseFloat(budgetField.value);
+        budgetInput.removeAttribute('readonly');
+        budgetInput.style.background = '';
+        budgetInput.style.cursor = '';
+
+        const budget = parseFloat(budgetInput.value);
         const hours  = parseFloat(hoursField.value);
         if (budget > 0 && hours > 0) {
             const implied = Math.round((budget / hours) * 100) / 100;
@@ -369,13 +365,13 @@ async function saveProject() {
 
     const payload = {
         name,
-        client_id:    parseInt(client_id),
-        description:  document.getElementById('f-description').value.trim() || null,
-        hourly_rate:  parseFloat(document.getElementById('f-rate').value)   || 0,
-        budget:       parseFloat(document.getElementById('f-budget').value) || null,
+        client_id: parseInt(client_id),
+        description: document.getElementById('f-description').value.trim() || null,
+        hourly_rate: parseFloat(document.getElementById('f-rate').value) || 0,
+        budget: parseFloat(document.getElementById('f-budget').value) || null,
         budget_hours: parseFloat(document.getElementById('f-budget-hours').value) || null,
         pricing_type: document.getElementById('f-pricing-type').value,
-        status:       document.getElementById('f-status').value,
+        status: document.getElementById('f-status').value,
     };
 
     const url    = editingId ? `/projects/${editingId}` : '/projects/';
