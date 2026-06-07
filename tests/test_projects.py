@@ -443,3 +443,169 @@ def test_scope_status_ownership_security(client, auth_headers):
         headers=user_b_headers
     )
     assert response.status_code == 404
+
+
+# ─── Pricing Type ─────────────────────────────────────────────────────────────
+
+def test_create_hourly_project(client, auth_headers):
+    """A project created with pricing_type='hourly' stores and returns it correctly."""
+    client_id = create_client(client, auth_headers)
+    response = create_project(
+        client, auth_headers, client_id,
+        pricing_type="hourly",
+        hourly_rate=80.0,
+        budget_hours=50.0
+    )
+    assert response.status_code in (200, 201)
+    data = response.json()
+    assert data["pricing_type"] == "hourly"
+    assert data["hourly_rate"]  == 80.0
+    assert data["budget_hours"] == 50.0
+
+
+def test_create_fixed_project(client, auth_headers):
+    """A project created with pricing_type='fixed' stores and returns it correctly."""
+    client_id = create_client(client, auth_headers)
+    response = create_project(
+        client, auth_headers, client_id,
+        pricing_type="fixed",
+        budget=4200.0,
+        budget_hours=50.0,
+        hourly_rate=0.0
+    )
+    assert response.status_code in (200, 201)
+    data = response.json()
+    assert data["pricing_type"] == "fixed"
+    assert data["budget"]       == 4200.0
+    assert data["budget_hours"] == 50.0
+
+
+def test_default_pricing_type_is_hourly(client, auth_headers):
+    """A project created without pricing_type defaults to 'hourly'."""
+    client_id = create_client(client, auth_headers)
+    response = create_project(client, auth_headers, client_id)
+    assert response.status_code in (200, 201)
+    assert response.json()["pricing_type"] == "hourly"
+
+
+def test_update_pricing_type(client, auth_headers):
+    """A project's pricing_type can be updated from hourly to fixed."""
+    client_id  = create_client(client, auth_headers)
+    project_id = create_project(
+        client, auth_headers, client_id,
+        pricing_type="hourly"
+    ).json()["id"]
+
+    response = client.patch(f"/projects/{project_id}", json={
+        "pricing_type": "fixed",
+        "budget": 3000.0
+    }, headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["pricing_type"] == "fixed"
+    assert data["budget"]       == 3000.0
+
+
+def test_invalid_pricing_type_rejected(client, auth_headers):
+    """A project created with an invalid pricing_type fails validation."""
+    client_id = create_client(client, auth_headers)
+    response = create_project(
+        client, auth_headers, client_id,
+        pricing_type="retainer"   # not a valid enum value
+    )
+    assert response.status_code == 422
+
+
+# ─── Scope Status — Fixed Pricing ─────────────────────────────────────────────
+
+def test_scope_status_fixed_project_profitability(client, auth_headers):
+    """Fixed project uses budget amount for revenue, not rate × hours."""
+    client_id  = create_client(client, auth_headers)
+    project_id = create_project(
+        client, auth_headers, client_id,
+        pricing_type="fixed",
+        budget=4200.0,       # contract amount — this is the revenue
+        budget_hours=50.0,   # internal estimate — implied rate = 4200/50 = $84/hr
+        hourly_rate=0.0
+    ).json()["id"]
+
+    # Log 25 hours — half the budget
+    log_hours(client, auth_headers, project_id, duration_hours=25.0)
+
+    response = client.get(
+        f"/projects/{project_id}/scope-status",
+        headers=auth_headers
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["alert_level"]         == "none"
+    assert data["budget_used_percent"] == 50.0
+    assert data["projected_revenue"]   == 4200.0   # the fixed contract amount
+    assert data["actual_cost"]         == 2100.0   # 25hrs × $84 implied rate
+    assert data["profit_margin"]       == 50.0     # (4200-2100)/4200 * 100
+
+
+def test_scope_status_fixed_project_no_budget_set(client, auth_headers):
+    """Fixed project with budget_hours but no budget amount returns None for revenue."""
+    client_id  = create_client(client, auth_headers)
+    project_id = create_project(
+        client, auth_headers, client_id,
+        pricing_type="fixed",
+        budget=None,         # contract amount not set yet
+        budget_hours=50.0,
+        hourly_rate=0.0
+    ).json()["id"]
+
+    log_hours(client, auth_headers, project_id, duration_hours=10.0)
+
+    response = client.get(
+        f"/projects/{project_id}/scope-status",
+        headers=auth_headers
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["budget_used_percent"] == 20.0    # hours still tracked
+    assert data["projected_revenue"]   is None    # no contract amount
+    assert data["profit_margin"]       is None    # can't calculate without revenue
+
+
+def test_scope_status_fixed_project_warning(client, auth_headers):
+    """Fixed project hitting 80% of budget hours triggers warning."""
+    client_id  = create_client(client, auth_headers)
+    project_id = create_project(
+        client, auth_headers, client_id,
+        pricing_type="fixed",
+        budget=4200.0,
+        budget_hours=10.0,
+        hourly_rate=0.0
+    ).json()["id"]
+
+    log_hours(client, auth_headers, project_id, duration_hours=8.0)
+
+    response = client.get(
+        f"/projects/{project_id}/scope-status",
+        headers=auth_headers
+    )
+    assert response.status_code == 200
+    assert response.json()["alert_level"] == "warning"
+
+
+def test_scope_status_fixed_project_danger(client, auth_headers):
+    """Fixed project exceeding 100% of budget hours triggers danger."""
+    client_id  = create_client(client, auth_headers)
+    project_id = create_project(
+        client, auth_headers, client_id,
+        pricing_type="fixed",
+        budget=4200.0,
+        budget_hours=10.0,
+        hourly_rate=0.0
+    ).json()["id"]
+
+    log_hours(client, auth_headers, project_id, duration_hours=11.0)
+
+    response = client.get(
+        f"/projects/{project_id}/scope-status",
+        headers=auth_headers
+    )
+    assert response.status_code == 200
+    assert response.json()["alert_level"] == "danger"
